@@ -33,9 +33,13 @@ $result = Set-AuthenticodeSignature -FilePath $Path -Certificate $cert -HashAlgo
 if (-not $result.SignerCertificate -or $result.SignerCertificate.Thumbprint -ne $cert.Thumbprint) {
     throw "Signing failed: $($result.StatusMessage)"
 }
+if (-not $result.TimeStamperCertificate) {
+    # Without a timestamp the signature becomes invalid when the certificate expires.
+    throw "Signed, but without a timestamp from $TimestampServer. Check the internet connection and sign again."
+}
 
 # 'UnknownError' only means this PC doesn't trust the self-signed root yet (see Trust-SigningCert.ps1).
 Write-Host "Signed $((Resolve-Path $Path).Path)"
 Write-Host "  signer:    $($cert.Subject) ($($cert.Thumbprint))"
-Write-Host "  timestamp: $(if ($result.TimeStamperCertificate) { 'yes' } else { 'NO' })"
+Write-Host "  timestamp: $($result.TimeStamperCertificate.Subject)"
 Write-Host "  status:    $($result.Status) - $($result.StatusMessage)"

@@ -7,6 +7,21 @@ using TaskTracker.UI;
 
 Console.OutputEncoding = Encoding.UTF8;
 
+// Two instances would each rewrite the whole day file every minute and erase each other's work.
+using var singleInstance = new Mutex(initiallyOwned: false, $@"Global\TaskTracker-{Environment.UserName}");
+try
+{
+    if (!singleInstance.WaitOne(TimeSpan.Zero))
+    {
+        AnsiConsole.MarkupLine("[red]TaskTracker is already running.[/] Switch to that window, or quit it first.");
+        return 1;
+    }
+}
+catch (AbandonedMutexException)
+{
+    // The previous instance was killed; we own the mutex now.
+}
+
 var time = TimeProvider.System;
 var store = new DayLogStore(DayLogStore.DefaultDirectory);
 
@@ -15,7 +30,7 @@ try
 {
     tracker = new Tracker(store, time);
 }
-catch (InvalidDataException ex)
+catch (Exception ex) when (ex is InvalidDataException or IOException or UnauthorizedAccessException)
 {
     AnsiConsole.MarkupLine($"[red]{Markup.Escape(ex.Message)}[/]");
     AnsiConsole.MarkupLine("[grey]Fix or move the file, then start again.[/]");
@@ -29,9 +44,10 @@ using var heartbeat = time.CreateTimer(_ =>
     {
         tracker.Tick();
     }
-    catch (IOException)
+    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException)
     {
-        // File briefly locked (antivirus, sync tool); the next beat retries.
+        // Still locked after Save's own retries, or a broken next-day file at midnight. Unhandled
+        // exceptions on a timer thread kill the process; the next beat simply tries again.
     }
 }, null, heartbeatInterval, heartbeatInterval);
 

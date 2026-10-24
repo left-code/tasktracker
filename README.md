@@ -49,6 +49,7 @@ Logs go to one file per day: `%USERPROFILE%\.TaskTracker\logs\yyyy-MM-dd.json`
   and closing the window also save it. If the app is killed, you lose at most about one minute.
 - **Sleep:** if the PC sleeps for more than 5 minutes while a task is running, the sleep time is not counted.
 - **Midnight:** an interval that runs past 00:00 is split between the two days' files.
+- **One instance:** a second copy of the app refuses to start, so two copies can't overwrite each other's log.
 
 ## Code signing
 

@@ -138,6 +138,112 @@ public sealed class TrackerTests : IDisposable
         Assert.Equal(TimeSpan.FromMinutes(15), day.Total);
     }
 
+    [Fact]
+    public void Start_SameRunningTask_DoesNotSplitInterval()
+    {
+        _tracker.Start("A");
+        Work(minutes: 5);
+        _tracker.Start(" a ");
+        Work(minutes: 5);
+
+        var task = _tracker.GetStatus().Day.Find("A")!;
+        Assert.Equal(1, task.IntervalCount);
+        Assert.Equal(TimeSpan.FromMinutes(10), task.Total);
+    }
+
+    [Fact]
+    public void SwitchRightAfterWake_LeavesNoZeroLengthInterval()
+    {
+        _tracker.Start("A");
+        Work(minutes: 10);
+        _time.Advance(TimeSpan.FromHours(1)); // asleep
+        _tracker.Start("B");                  // first thing after waking
+        Work(minutes: 5);
+
+        var day = _tracker.GetStatus().Day;
+        Assert.Equal(1, day.Find("A")!.IntervalCount);
+        Assert.Equal(TimeSpan.FromMinutes(10), day.Find("A")!.Total);
+        Assert.DoesNotContain(day.Intervals, i => i.Duration == TimeSpan.Zero);
+    }
+
+    [Fact]
+    public void ClockSetBack_DoesNotProduceNegativeDurations()
+    {
+        var clock = new ManualClock(new DateTimeOffset(2026, 10, 24, 9, 0, 0, TimeSpan.Zero));
+        var tracker = new Tracker(_temp.Store, clock);
+        tracker.Start("A");
+        clock.Work(tracker, minutes: 10);
+        clock.Now -= TimeSpan.FromHours(1);
+        tracker.Tick(); // the app notices within 200 ms (UI poll); time before that is not counted
+        clock.Work(tracker, minutes: 5);
+
+        var day = tracker.GetStatus().Day;
+        Assert.All(day.Intervals, i => Assert.True(i.Duration >= TimeSpan.Zero));
+        Assert.Equal(TimeSpan.FromMinutes(15), day.Total);
+    }
+
+    [Fact]
+    public void SmallClockCorrection_DoesNotSplitInterval()
+    {
+        var clock = new ManualClock(new DateTimeOffset(2026, 10, 24, 9, 0, 0, TimeSpan.Zero));
+        var tracker = new Tracker(_temp.Store, clock);
+        tracker.Start("A");
+        clock.Work(tracker, minutes: 2);
+        clock.Now -= TimeSpan.FromSeconds(2);
+        clock.Work(tracker, minutes: 2);
+
+        Assert.Equal(1, tracker.GetStatus().Day.Find("A")!.IntervalCount);
+    }
+
+    /// <summary>A clock that, unlike FakeTimeProvider, can be set back (like a user or NTP adjusting it).</summary>
+    private sealed class ManualClock(DateTimeOffset now) : TimeProvider
+    {
+        public DateTimeOffset Now { get; set; } = now;
+        public override DateTimeOffset GetUtcNow() => Now;
+        public override TimeZoneInfo LocalTimeZone => TimeZoneInfo.Utc;
+
+        public void Work(Tracker tracker, int minutes)
+        {
+            for (var i = 0; i < minutes; i++)
+            {
+                Now += TimeSpan.FromMinutes(1);
+                tracker.Tick();
+            }
+        }
+    }
+
+    [Fact]
+    public void PausedOverSeveralDays_WritesNoEmptyDayFiles()
+    {
+        _tracker.Start("A");
+        Work(minutes: 10);
+        _tracker.Pause();
+        _time.Advance(TimeSpan.FromDays(3));
+        _tracker.Tick();
+
+        Assert.Equal(Day.AddDays(3), _tracker.Today);
+        Assert.True(File.Exists(_temp.Store.PathFor(Day)));
+        Assert.False(File.Exists(_temp.Store.PathFor(Day.AddDays(1))));
+        Assert.False(File.Exists(_temp.Store.PathFor(Day.AddDays(2))));
+    }
+
+    [Fact]
+    public void FailedSaveOnPause_IsWrittenByNextTick()
+    {
+        _tracker.Start("A");
+        Work(minutes: 10);
+
+        using (new FileStream(_temp.Store.PathFor(Day), FileMode.Open, FileAccess.Read, FileShare.None))
+            Assert.ThrowsAny<Exception>(_tracker.Pause);
+
+        Assert.Equal(TrackerState.Paused, _tracker.State);
+        _time.Advance(TimeSpan.FromMinutes(1));
+        _tracker.Tick();
+
+        var interval = Assert.Single(Assert.Single(_temp.Store.Load(Day).Tasks).Intervals);
+        Assert.Equal(TimeSpan.FromMinutes(10), interval.Duration);
+    }
+
     /// <summary>Advances the clock minute by minute with a heartbeat, like the real app.</summary>
     private void Work(int minutes, Tracker? tracker = null)
     {

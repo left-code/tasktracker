@@ -63,6 +63,22 @@ public sealed class DayLogStoreTests : IDisposable
         Assert.Throws<InvalidDataException>(() => _temp.Store.Load(Day));
     }
 
+    [Theory]
+    [InlineData("{}")]
+    [InlineData("{ \"date\": \"2026-10-23\", \"tasks\": null }")]
+    [InlineData("{ \"date\": \"2026-10-25\", \"tasks\": [ { \"task\": \"A\", \"intervals\": null } ] }")]
+    public void Load_UsesFileNameDateAndFillsMissingLists(string json)
+    {
+        System.IO.Directory.CreateDirectory(_temp.Directory);
+        File.WriteAllText(_temp.Store.PathFor(Day), json);
+
+        var log = _temp.Store.Load(Day);
+
+        Assert.Equal(Day, log.Date);
+        Assert.NotNull(log.Tasks);
+        Assert.All(log.Tasks, t => Assert.NotNull(t.Intervals));
+    }
+
     [Fact]
     public void RecentTaskNames_MostRecentFirst_DistinctAcrossDays()
     {

@@ -21,14 +21,24 @@ public sealed class DayLogStore(string directory)
         if (!File.Exists(path))
             return new DayLog { Date = date };
 
+        DayLog? log;
         try
         {
-            return JsonSerializer.Deserialize<DayLog>(File.ReadAllText(path), Options) ?? new DayLog { Date = date };
+            log = JsonSerializer.Deserialize<DayLog>(WithRetry(() => File.ReadAllText(path)), Options);
         }
         catch (JsonException ex)
         {
             throw new InvalidDataException($"Log file '{path}' is not valid JSON: {ex.Message}", ex);
         }
+
+        // The file name is the source of truth: a missing or wrong "date" would otherwise make the
+        // tracker save into another day's file or loop forever looking for the next day.
+        log ??= new DayLog();
+        log.Date = date;
+        log.Tasks ??= [];
+        foreach (var task in log.Tasks)
+            task.Intervals ??= [];
+        return log;
     }
 
     /// <summary>Writes to a temp file first, then swaps it in, so a crash never leaves a half-written log.</summary>
@@ -39,8 +49,33 @@ public sealed class DayLogStore(string directory)
 
         var path = PathFor(log.Date);
         var tempPath = path + ".tmp";
-        File.WriteAllText(tempPath, JsonSerializer.Serialize(log, Options));
-        File.Move(tempPath, path, overwrite: true);
+        var json = JsonSerializer.Serialize(log, Options);
+        WithRetry(() =>
+        {
+            File.WriteAllText(tempPath, json);
+            File.Move(tempPath, path, overwrite: true);
+            return true;
+        });
+    }
+
+    /// <summary>
+    /// Antivirus, sync tools and the search indexer briefly lock files. On Windows that surfaces as
+    /// IOException or UnauthorizedAccessException; a short retry rides it out.
+    /// </summary>
+    private static T WithRetry<T>(Func<T> action)
+    {
+        const int attempts = 4;
+        for (var i = 1; ; i++)
+        {
+            try
+            {
+                return action();
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException && i < attempts)
+            {
+                Thread.Sleep(TimeSpan.FromMilliseconds(75));
+            }
+        }
     }
 
     /// <summary>Distinct task names from the last <paramref name="days"/> days, most recently worked on first.</summary>

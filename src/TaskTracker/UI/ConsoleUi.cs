@@ -26,36 +26,79 @@ public sealed class ConsoleUi(Tracker tracker, DayLogStore store)
 
         while (true)
         {
-            AnsiConsole.Clear();
-            switch (WaitForAction())
+            try
             {
-                case ConsoleKey.P:
-                    if (tracker.State == TrackerState.Running)
-                        tracker.Pause();
-                    else
-                        tracker.Resume();
-                    break;
-
-                case ConsoleKey.S:
-                    StartIfChosen(PickTask(allowCancel: true));
-                    break;
-
-                case ConsoleKey.N:
-                    StartIfChosen(AskNewTask(allowCancel: true));
-                    break;
-
-                case ConsoleKey.T:
-                    ShowTodayScreen();
-                    break;
-
-                case ConsoleKey.Q:
-                    tracker.Stop();
-                    AnsiConsole.Clear();
-                    WriteSummary(tracker.GetStatus().Day);
-                    AnsiConsole.MarkupLine($"[grey]Log: {Markup.Escape(store.PathFor(tracker.Today))}[/]");
+                if (!HandleNextAction())
                     return;
             }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException)
+            {
+                // The tracker keeps its state and the heartbeat retries the save, so carry on.
+                AnsiConsole.MarkupLine($"[red]Could not save the log:[/] {Markup.Escape(ex.Message)}");
+                AnsiConsole.MarkupLine("[grey]Tracking continues and saving is retried every minute. Press any key.[/]");
+                Console.ReadKey(intercept: true);
+            }
         }
+    }
+
+    /// <summary>Waits for one key action and performs it. Returns false when the user quits.</summary>
+    private bool HandleNextAction()
+    {
+        AnsiConsole.Clear();
+        switch (WaitForAction())
+        {
+            case ConsoleKey.P:
+                if (tracker.State == TrackerState.Running)
+                    tracker.Pause();
+                else
+                    tracker.Resume();
+                break;
+
+            case ConsoleKey.S:
+                StartIfChosen(PickTask(allowCancel: true));
+                break;
+
+            case ConsoleKey.N:
+                StartIfChosen(AskNewTask(allowCancel: true));
+                break;
+
+            case ConsoleKey.T:
+                ShowTodayScreen();
+                break;
+
+            case ConsoleKey.Q:
+                Quit();
+                return false;
+        }
+        return true;
+    }
+
+    /// <summary>Stops and saves, retrying once on failure; exits either way, since the heartbeat stops with the app.</summary>
+    private void Quit()
+    {
+        AnsiConsole.Clear();
+        for (var attempt = 1; ; attempt++)
+        {
+            try
+            {
+                tracker.Stop();
+                break;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException && attempt < 2)
+            {
+                AnsiConsole.MarkupLine($"[yellow]Saving failed ({Markup.Escape(ex.Message)}), retrying...[/]");
+                Thread.Sleep(TimeSpan.FromSeconds(1));
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                AnsiConsole.MarkupLine($"[red]Could not save the last interval:[/] {Markup.Escape(ex.Message)}");
+                AnsiConsole.MarkupLine("[grey]At most the last minute is missing from the log.[/]");
+                break;
+            }
+        }
+
+        WriteSummary(tracker.GetStatus().Day);
+        AnsiConsole.MarkupLine($"[grey]Log: {Markup.Escape(store.PathFor(tracker.Today))}[/]");
     }
 
     private void StartIfChosen(string? task)
