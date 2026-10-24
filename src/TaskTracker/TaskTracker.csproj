@@ -1,0 +1,27 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <!-- Shown in the exe's Properties > Details and in Task Manager. -->
+  <PropertyGroup>
+    <Version>1.0.0</Version>
+    <Product>TaskTracker</Product>
+    <AssemblyTitle>TaskTracker - console time tracker</AssemblyTitle>
+    <Description>Tracks time spent on tasks and writes one JSON log per day.</Description>
+    <Authors>vlkozl</Authors>
+    <Company>vlkozl</Company>
+    <Copyright>Copyright © 2026 vlkozl</Copyright>
+    <RepositoryUrl>https://github.com/vlkozl/tasktracker</RepositoryUrl>
+    <ApplicationIcon>app.ico</ApplicationIcon>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Spectre.Console" Version="0.57.2" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,43 @@
+{
+    // See https://go.microsoft.com/fwlink/?LinkId=733558
+    // for the documentation about the tasks.json format
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "build",
+            "type": "process",
+            "command": "dotnet",
+            "args": ["build", "${workspaceFolder}/TaskTracker.slnx"],
+            "problemMatcher": "$msCompile",
+            "group": { "kind": "build", "isDefault": true }
+        },
+        {
+            "label": "test",
+            "type": "process",
+            "command": "dotnet",
+            "args": ["test", "${workspaceFolder}/TaskTracker.slnx"],
+            "problemMatcher": "$msCompile",
+            "group": { "kind": "test", "isDefault": true }
+        },
+        {
+            "label": "publish (single exe)",
+            "type": "process",
+            "command": "dotnet",
+            "args": [
+                "publish", "${workspaceFolder}/src/TaskTracker/TaskTracker.csproj",
+                "-c", "Release", "-r", "win-x64", "--self-contained",
+                "-p:PublishSingleFile=true", "-o", "${workspaceFolder}/publish"
+            ],
+            "problemMatcher": "$msCompile"
+        },
+        {
+            // Publish, then sign publish\TaskTracker.exe (needs the cert from scripts\New-SigningCert.ps1).
+            "label": "publish + sign",
+            "type": "process",
+            "command": "powershell.exe",
+            "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "${workspaceFolder}/scripts/Sign-Exe.ps1"],
+            "dependsOn": "publish (single exe)",
+            "problemMatcher": []
+        }
+    ]
+}
