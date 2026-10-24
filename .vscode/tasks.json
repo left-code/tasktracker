@@ -31,7 +31,8 @@
             "problemMatcher": "$msCompile"
         },
         {
-            // Publish, then sign publish\TaskTracker.exe (needs the cert from scripts\New-SigningCert.ps1).
+            // Optional: publish, then sign publish\TaskTracker.exe (needs the cert from
+            // scripts\New-SigningCert.ps1). Plain "publish (single exe)" is enough to distribute.
             "label": "publish + sign",
             "type": "process",
             "command": "powershell.exe",

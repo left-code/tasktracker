@@ -12,6 +12,7 @@ dotnet run --project src/TaskTracker
 In VS Code, press **F5**. The app runs in the integrated terminal, because it needs key presses.
 
 To build a standalone `TaskTracker.exe`, run the **publish (single exe)** task. The exe is written to `publish/`.
+It doesn't need .NET installed on the target PC, and it doesn't need to be signed (see [Code signing](#code-signing-optional)).
 
 ## Keys
 
@@ -51,11 +52,15 @@ Logs go to one file per day: `%USERPROFILE%\.TaskTracker\logs\yyyy-MM-dd.json`
 - **Midnight:** an interval that runs past 00:00 is split between the two days' files.
 - **One instance:** a second copy of the app refuses to start, so two copies can't overwrite each other's log.
 
-## Code signing
+## Code signing (optional)
 
-`TaskTracker.exe` is signed with a **self-signed** certificate. The signature proves the exe
-hasn't been modified since it was signed. Windows only shows the publisher as verified on
-PCs that trust the certificate. Everywhere else it still shows "Unknown publisher".
+Signing is **not required**. The **publish (single exe)** task produces an unsigned
+`TaskTracker.exe` that runs normally. A self-signed signature changes little for others:
+Windows still shows "Unknown publisher" and SmartScreen still warns about downloaded files.
+Its only uses are proving the exe hasn't been modified, and showing a verified publisher on
+your own PCs if you trust the certificate there.
+
+To sign, use the **publish + sign** task instead of **publish (single exe)**. The certificate used is:
 
 | | |
 |---|---|
