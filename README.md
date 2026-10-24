@@ -60,32 +60,33 @@ Windows still shows "Unknown publisher" and SmartScreen still warns about downlo
 Its only uses are proving the exe hasn't been modified, and showing a verified publisher on
 your own PCs if you trust the certificate there.
 
-To sign, use the **publish + sign** task instead of **publish (single exe)**. The certificate used is:
+No certificate is included in the repository. To sign your own builds:
 
-| | |
-|---|---|
-| Subject | `CN=vlkozl (TaskTracker code signing)` |
-| Thumbprint | `38B82DA0BFC53C70417BA7F12AC0449403E808CC` |
-| Valid until | 2029-10-24 (signatures are timestamped, so they stay valid after that) |
-| Public certificate | [`signing/tasktracker-codesign.cer`](signing/tasktracker-codesign.cer) |
+1. **Create a certificate** (once): run `scripts\New-SigningCert.ps1`. It creates a certificate
+   named `CN=Vladimir Kozlov (TaskTracker code signing)`, valid for 3 years, in your personal certificate store.
+   It also exports the public part to `signing\tasktracker-codesign.cer`. The `signing/` folder is
+   git-ignored, and the private key never leaves the PC.
+2. **Sign:** use the **publish + sign** task instead of **publish (single exe)**. It runs
+   `scripts\Sign-Exe.ps1`, which adds a timestamp, so the signature stays valid after the certificate expires.
+   This step needs internet access.
+3. **Trust the certificate on a PC** (optional, once per PC, no admin needed): copy the `.cer` file into
+   that PC's `signing\` folder, then run:
 
-**Trust it on a PC** (once per PC, no admin needed):
+   ```powershell
+   powershell -ExecutionPolicy Bypass -File scripts\Trust-SigningCert.ps1
+   ```
 
-```powershell
-powershell -ExecutionPolicy Bypass -File scripts\Trust-SigningCert.ps1
-```
+   Windows asks for confirmation. Click **Yes** only if the thumbprint in the dialog matches the one the script printed.
 
-Windows asks for confirmation. Before you click **Yes**, check that the thumbprint in the dialog matches the one above.
 To check an exe: right-click it → **Properties → Digital Signatures**, or run
 `Get-AuthenticodeSignature TaskTracker.exe`.
-
-**Signing (maintainer):** run `scripts\New-SigningCert.ps1` once. It creates the certificate
-in your personal certificate store and exports the public `.cer`. After that, run the **publish + sign**
-task, which runs `scripts\Sign-Exe.ps1`. The private key never leaves that PC, and
-`*.pfx` files are git-ignored.
 
 ## Tests
 
 ```powershell
 dotnet test
 ```
+
+## License
+
+[MIT](LICENSE)

@@ -97,8 +97,10 @@ VS Code tasks in `.vscode/tasks.json` wrap the same commands (`build`, `test`, `
   - no ternary operator and no `??`;
   - `$PSScriptRoot` is empty inside `param()` defaults in 5.1, so resolve defaults in the script body.
 - Code signing is optional. It uses a self-signed certificate, and `Sign-Exe.ps1` fails if it can't get a timestamp.
-- Never commit private keys (`*.pfx`, `*.p12`, `*.snk` are gitignored). `signing/tasktracker-codesign.cer`
-  is the public certificate and is meant to be committed.
+  The certificate subject (`CN=Vladimir Kozlov (TaskTracker code signing)`) is a default in both
+  `New-SigningCert.ps1` and `Sign-Exe.ps1`. If you change it, change it in both.
+- Never commit certificates or keys. `*.pfx`, `*.p12`, `*.snk` and the whole `signing/` folder (where the
+  public `.cer` is exported) are gitignored.
 
 ## Changelog, versioning, git
 
@@ -106,6 +108,6 @@ VS Code tasks in `.vscode/tasks.json` wrap the same commands (`build`, `test`, `
   using only the Added / Changed / Deprecated / Removed / Fixed / Security headings.
   When releasing, update the link references at the bottom.
 - The version is set in `<Version>` in `src/TaskTracker/TaskTracker.csproj`. Releases are tagged `vX.Y.Z`.
-- Only `.vscode/tasks.json` and `launch.json` are committed. `bin/`, `obj/`, `publish/`, `.vs/`, `.serena/`
-  and `.remember/` are ignored, so don't commit them.
+- Only `.vscode/tasks.json` and `launch.json` are committed. `bin/`, `obj/`, `publish/`, `signing/`, `.vs/`,
+  `.serena/` and `.remember/` are ignored, so don't commit them.
 - The repo is used on Windows with `core.autocrlf=true`. LF-to-CRLF warnings from git are harmless.

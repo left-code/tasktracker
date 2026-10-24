@@ -487,3 +487,6 @@ $RECYCLE.BIN/
 *.pfx
 *.p12
 *.snk
+
+# Exported signing certificates stay local (see README, Code signing)
+signing/

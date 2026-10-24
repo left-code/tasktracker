@@ -10,6 +10,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - `AGENTS.md` with build, test and architecture notes for AI coding agents working on the repository.
+- MIT license.
+
+### Changed
+
+- The exe's author and copyright details now show "Vladimir Kozlov".
+- A new signing certificate is named `CN=Vladimir Kozlov (TaskTracker code signing)`. Certificates created with the old default name are no longer found by `Sign-Exe.ps1`, so create a new one before signing.
+
+### Removed
+
+- The public signing certificate is no longer in the repository. `New-SigningCert.ps1` exports it to the git-ignored `signing/` folder; copy it to other PCs yourself.
 
 ## [1.0.0] - 2026-10-24
 

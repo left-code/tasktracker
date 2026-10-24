@@ -5,11 +5,12 @@
 .DESCRIPTION
     The certificate and its private key go into your personal store (Cert:\CurrentUser\My) and
     never leave this PC. Only the public part is exported, to signing\tasktracker-codesign.cer,
-    so other PCs can trust the signature (see Trust-SigningCert.ps1). That file is safe to commit.
+    so other PCs can trust the signature (see Trust-SigningCert.ps1). The signing\ folder is
+    git-ignored; copy the .cer to other PCs yourself.
 #>
 [CmdletBinding()]
 param(
-    [string] $Subject = 'CN=vlkozl (TaskTracker code signing)',
+    [string] $Subject = 'CN=Vladimir Kozlov (TaskTracker code signing)',
     [int] $Years = 3,
     [switch] $Force
 )

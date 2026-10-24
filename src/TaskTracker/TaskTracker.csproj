@@ -13,10 +13,11 @@
     <Product>TaskTracker</Product>
     <AssemblyTitle>TaskTracker - console time tracker</AssemblyTitle>
     <Description>Tracks time spent on tasks and writes one JSON log per day.</Description>
-    <Authors>vlkozl</Authors>
-    <Company>vlkozl</Company>
-    <Copyright>Copyright © 2026 vlkozl</Copyright>
+    <Authors>Vladimir Kozlov</Authors>
+    <Company>Vladimir Kozlov</Company>
+    <Copyright>Copyright © 2026 Vladimir Kozlov</Copyright>
     <RepositoryUrl>https://github.com/vlkozl/tasktracker</RepositoryUrl>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <ApplicationIcon>app.ico</ApplicationIcon>
   </PropertyGroup>
 

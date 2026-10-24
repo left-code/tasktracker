@@ -9,7 +9,7 @@
 [CmdletBinding()]
 param(
     [string] $Path,
-    [string] $Subject = 'CN=vlkozl (TaskTracker code signing)',
+    [string] $Subject = 'CN=Vladimir Kozlov (TaskTracker code signing)',
     [string] $TimestampServer = 'http://timestamp.digicert.com'
 )
 
