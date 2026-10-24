@@ -105,6 +105,19 @@ public sealed class Tracker
         }
     }
 
+    /// <summary>
+    /// Stops tracking and reads today's log back from disk, so the report shows exactly what was
+    /// saved and nothing keeps ticking while it is on screen.
+    /// </summary>
+    public DaySummary StopForReport()
+    {
+        lock (_lock)
+        {
+            Stop(); // Lock is reentrant
+            return DaySummary.From(_store.Load(_today.Date));
+        }
+    }
+
     /// <summary>Heartbeat: persists the running interval (and any failed save) so a crash loses at most one beat.</summary>
     public void Tick()
     {
@@ -203,18 +216,9 @@ public sealed class Tracker
         _dirty = false;
     }
 
-    // Whole seconds keep the JSON timestamps short and readable.
-    private DateTimeOffset Now()
-    {
-        var now = _time.GetLocalNow();
-        return now.AddTicks(-(now.Ticks % TimeSpan.TicksPerSecond));
-    }
+    private DateTimeOffset Now() => LocalClock.Now(_time);
 
-    private static DateOnly DateOf(DateTimeOffset time) => DateOnly.FromDateTime(time.DateTime);
+    private static DateOnly DateOf(DateTimeOffset time) => LocalClock.DateOf(time);
 
-    private DateTimeOffset MidnightOf(DateOnly date)
-    {
-        var midnight = date.ToDateTime(TimeOnly.MinValue);
-        return new DateTimeOffset(midnight, _time.LocalTimeZone.GetUtcOffset(midnight));
-    }
+    private DateTimeOffset MidnightOf(DateOnly date) => LocalClock.MidnightOf(date, _time.LocalTimeZone);
 }

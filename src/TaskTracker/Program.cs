@@ -7,27 +7,34 @@ using TaskTracker.UI;
 
 Console.OutputEncoding = Encoding.UTF8;
 
-// Two instances would each rewrite the whole day file every minute and erase each other's work.
-using var singleInstance = new Mutex(initiallyOwned: false, $@"Global\TaskTracker-{Environment.UserName}");
-try
-{
-    if (!singleInstance.WaitOne(TimeSpan.Zero))
-    {
-        AnsiConsole.MarkupLine("[red]TaskTracker is already running.[/] Switch to that window, or quit it first.");
-        return 1;
-    }
-}
-catch (AbandonedMutexException)
-{
-    // The previous instance was killed; we own the mutex now.
-}
-
 var time = TimeProvider.System;
 var store = new DayLogStore(DayLogStore.DefaultDirectory);
+IPowerHistory power = OperatingSystem.IsWindows() ? new EventLogPowerHistory() : new NoPowerHistory();
+var commands = new CommandTracker(store, new OpenTaskStore(OpenTaskStore.DefaultPath), power, time);
 
+if (args.Length > 0)
+    return CommandLine.Run(args, store, commands, time);
+
+using var singleInstance = SingleInstance.TryAcquire();
+if (singleInstance is null)
+{
+    AnsiConsole.MarkupLine("[red]TaskTracker is already running.[/] Switch to that window, or quit it first.");
+    return 1;
+}
+
+string? continueTask;
 Tracker tracker;
 try
 {
+    // A task started with "TaskTracker start" carries on here: record it up to now, then keep timing it.
+    var pickedUp = commands.End();
+    if (pickedUp is { OffUnknown: true })
+    {
+        AnsiConsole.MarkupLine($"[yellow]Recorded {Markup.Escape(pickedUp.Task)} so far, but could not read the Windows sleep history,[/]");
+        AnsiConsole.MarkupLine("[yellow]so time asleep or switched off since it started may be counted.[/] [grey]Press any key.[/]");
+        Console.ReadKey(intercept: true);
+    }
+    continueTask = pickedUp?.Task;
     tracker = new Tracker(store, time);
 }
 catch (Exception ex) when (ex is InvalidDataException or IOException or UnauthorizedAccessException)
@@ -59,5 +66,5 @@ Console.CancelKeyPress += (_, _) =>
 };
 using var onWindowClose = PosixSignalRegistration.Create(PosixSignal.SIGHUP, _ => tracker.Stop());
 
-new ConsoleUi(tracker, store).Run();
+new ConsoleUi(tracker, store).Run(continueTask);
 return 0;

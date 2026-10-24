@@ -62,7 +62,7 @@ public sealed class DayLogStore(string directory)
     /// Antivirus, sync tools and the search indexer briefly lock files. On Windows that surfaces as
     /// IOException or UnauthorizedAccessException; a short retry rides it out.
     /// </summary>
-    private static T WithRetry<T>(Func<T> action)
+    internal static T WithRetry<T>(Func<T> action)
     {
         const int attempts = 4;
         for (var i = 1; ; i++)

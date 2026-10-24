@@ -1,7 +1,8 @@
 # TaskTracker
 
-A Windows console app that tracks how much time you spend on tasks. Type a task name, and a
-timer starts. You can switch between tasks, pause, and see today's totals at any time.
+A 100% vibe coded Windows console app that tracks how much time you spend on tasks.
+Type a task name, and a timer starts. You can switch between tasks, pause, and see
+today's totals at any time.
 
 ## Run
 
@@ -21,8 +22,36 @@ It doesn't need .NET installed on the target PC, and it doesn't need to be signe
 | `P` | Pause / resume the current task |
 | `S` | Switch task: pick a recent task (type to search) or choose **+ New task...** |
 | `N` | Type a new task name straight away |
-| `T` | Today's summary. In the summary, `I` lists every interval |
+| `R` | Report: stop tracking and show today's summary from the log. `I` lists every interval, `Q` quits, any other key picks a task to continue |
 | `Q` | Stop, save, and print today's summary |
+
+## Commands
+
+You don't have to keep the window open. These commands do one thing and exit:
+
+| Command | Action |
+|---------|--------|
+| `TaskTracker start <task>` | Start a task. If another one is running, it ends first (a switch) |
+| `TaskTracker end [<task>]` | End the running task and print its time. With a name, it checks that this task is the one running |
+| `TaskTracker report [yyyy-MM-dd]` | Print a day's summary; today without a date |
+| `TaskTracker --help` | Commands and keys (also `-h`, `-?`, `/?`) |
+
+Quotes are optional: `TaskTracker start Fix login bug` works. The running task is kept in
+`%USERPROFILE%\.TaskTracker\current.json`, and its time is written to the day log when it ends, split at midnight if needed.
+Nothing runs in the background, so time the PC was asleep, hibernating or switched off is read from the Windows
+System event log at the end and left out. If that log can't be read, `end` says so and counts the whole time.
+A single run can't be longer than 7 days: `end` refuses and asks you to correct the start in `current.json` (or delete
+the file to discard the task).
+
+While the TaskTracker window is open, `start`, `end` and today's report are refused, so only one copy times tasks.
+When you open the window, it carries on with the task started with `start`.
+The report shows the running task as running and doesn't include it yet: its time is added when it ends.
+
+To see a report without starting the tracker, run `TaskTracker report` for today, or `TaskTracker report 2026-10-23`
+for any other day (`yyyy-MM-dd`). It prints the summary and exits. Today's report refuses while TaskTracker is running,
+because that copy may still be timing a task; press `R` in that window instead. Other days can be reported at any time.
+
+Run `TaskTracker --help` (or `-h`, `-?`, `/?`) for a summary of commands and keys.
 
 Task names are any text. Matching ignores case and surrounding spaces, so `Bug fix` and `bug fix ` count as the same task.
 The task picker lists tasks from the last 7 days, with the most recently used first.

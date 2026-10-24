@@ -1,3 +1,4 @@
+using System.Reflection;
 using Spectre.Console;
 using Spectre.Console.Rendering;
 using TaskTracker.Reporting;
@@ -13,16 +14,17 @@ public sealed class ConsoleUi(Tracker tracker, DayLogStore store)
     private const string CancelChoice = "<- Cancel";
     private static readonly TimeSpan KeyPollInterval = TimeSpan.FromMilliseconds(200);
     private static readonly ConsoleKey[] ActionKeys =
-        [ConsoleKey.P, ConsoleKey.S, ConsoleKey.N, ConsoleKey.T, ConsoleKey.Q];
+        [ConsoleKey.P, ConsoleKey.S, ConsoleKey.N, ConsoleKey.R, ConsoleKey.Q];
 
-    public void Run()
+    /// <param name="continueTask">A task started with <c>TaskTracker start</c> to keep timing, instead of asking.</param>
+    public void Run(string? continueTask = null)
     {
         AnsiConsole.Clear();
         var status = tracker.GetStatus();
         if (status.Day.TaskCount > 0)
             WriteSummary(status.Day);
 
-        tracker.Start(PickTask(allowCancel: false)!);
+        tracker.Start(continueTask ?? PickTask(allowCancel: false)!);
 
         while (true)
         {
@@ -62,9 +64,8 @@ public sealed class ConsoleUi(Tracker tracker, DayLogStore store)
                 StartIfChosen(AskNewTask(allowCancel: true));
                 break;
 
-            case ConsoleKey.T:
-                ShowTodayScreen();
-                break;
+            case ConsoleKey.R:
+                return ShowReport();
 
             case ConsoleKey.Q:
                 Quit();
@@ -97,7 +98,7 @@ public sealed class ConsoleUi(Tracker tracker, DayLogStore store)
             }
         }
 
-        WriteSummary(tracker.GetStatus().Day);
+        WriteReport(tracker.GetStatus().Day);
         AnsiConsole.MarkupLine($"[grey]Log: {Markup.Escape(store.PathFor(tracker.Today))}[/]");
     }
 
@@ -154,7 +155,7 @@ public sealed class ConsoleUi(Tracker tracker, DayLogStore store)
         var text =
             $"{current}\n" +
             $"Today: [bold]{FormatDuration(status.Day.Total)}[/] across [bold]{status.Day.TaskCount}[/] task(s)\n\n" +
-            $"[grey][[P]] {pauseLabel}   [[S]] switch task   [[N]] new task   [[T]] today   [[Q]] quit[/]";
+            $"[grey][[P]] {pauseLabel}   [[S]] switch task   [[N]] new task   [[R]] report   [[Q]] quit[/]";
 
         var panel = new Panel(new Markup(text))
             .Header($" TaskTracker — {status.Day.Date:ddd, dd MMM yyyy} ")
@@ -200,25 +201,129 @@ public sealed class ConsoleUi(Tracker tracker, DayLogStore store)
         return name.Length == 0 ? null : name;
     }
 
-    private void ShowTodayScreen()
+    /// <summary>
+    /// Stops tracking and shows today's report until the user starts a task (returns true) or quits (false).
+    /// </summary>
+    private bool ShowReport()
     {
-        var day = tracker.GetStatus().Day;
-        WriteSummary(day);
-        AnsiConsole.MarkupLine("[grey][[I]] show all intervals, any other key to return[/]");
-        if (Console.ReadKey(intercept: true).Key != ConsoleKey.I)
-            return;
+        DaySummary day;
+        string? warning = null;
+        try
+        {
+            day = tracker.StopForReport();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException)
+        {
+            // A failed midnight save aborts Stop before it stops: the task is still ticking, so no report.
+            if (tracker.State != TrackerState.Idle)
+                throw;
 
-        AnsiConsole.Clear();
-        WriteIntervals(day);
-        AnsiConsole.MarkupLine("[grey]Press any key to return[/]");
-        Console.ReadKey(intercept: true);
+            // Stopped in memory, but the log could not be saved or read back. Show the in-memory
+            // times; the heartbeat retries the save.
+            day = tracker.GetStatus().Day;
+            warning = $"[yellow]Could not save or read back the log:[/] {Markup.Escape(ex.Message)}\n" +
+                      "[grey]Showing times from memory. Saving is retried every minute.[/]";
+        }
+
+        while (true)
+        {
+            AnsiConsole.Clear();
+            WriteReport(day);
+            if (warning is not null)
+                AnsiConsole.MarkupLine(warning);
+            AnsiConsole.MarkupLine("[grey]Tracking is stopped.   [[I]] all intervals   [[Q]] quit   any other key to start a task[/]");
+
+            switch (Console.ReadKey(intercept: true).Key)
+            {
+                case ConsoleKey.I:
+                    AnsiConsole.Clear();
+                    WriteIntervals(day);
+                    AnsiConsole.MarkupLine("[grey]Press any key to return[/]");
+                    Console.ReadKey(intercept: true);
+                    break;
+
+                case ConsoleKey.Q:
+                    Quit();
+                    return false;
+
+                default:
+                    AnsiConsole.Clear();
+                    string? task;
+                    try
+                    {
+                        task = PickTask(allowCancel: true);
+                    }
+                    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                    {
+                        // Reading recent tasks failed; stay on the report rather than show a stopped
+                        // tracker as if it were paused.
+                        warning = $"[yellow]Could not read recent tasks:[/] {Markup.Escape(ex.Message)}";
+                        break;
+                    }
+                    if (task is null)
+                        break; // cancelled: back to the report
+                    tracker.Start(task);
+                    return true;
+            }
+        }
+    }
+
+    /// <summary>Output of <c>TaskTracker --help</c>.</summary>
+    public static void WriteHelp(string logDirectory)
+    {
+        var version = typeof(ConsoleUi).Assembly
+            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion.Split('+')[0];
+
+        AnsiConsole.MarkupLine($"[bold]TaskTracker[/] {Markup.Escape(version ?? "")}");
+        AnsiConsole.MarkupLine("Tracks how much time you spend on tasks. Pick or type a task and a timer starts;");
+        AnsiConsole.MarkupLine("switch, pause and report while you work. Each day is saved as one JSON log.");
+        AnsiConsole.WriteLine();
+
+        AnsiConsole.MarkupLine("[bold]Usage[/]");
+        var commands = new Grid().AddColumn(new GridColumn().PadLeft(2).PadRight(4)).AddColumn();
+        commands.AddRow("TaskTracker", "Start tracking (asks for a task first)");
+        commands.AddRow("TaskTracker start <task>", "Start a task without keeping a window open");
+        commands.AddRow("TaskTracker end [[<task>]]", "End the task started with [bold]start[/]");
+        commands.AddRow("TaskTracker report", "Print today's summary and exit");
+        commands.AddRow("TaskTracker report [[yyyy-MM-dd]]", "Print another day's summary");
+        commands.AddRow("TaskTracker --help", "Show this help (also [bold]-h[/], [bold]-?[/], [bold]/?[/])");
+        AnsiConsole.Write(commands);
+        AnsiConsole.MarkupLine("[grey]  start on another task switches to it. Quotes around task names are optional.[/]");
+        AnsiConsole.MarkupLine("[grey]  Time the PC was asleep or off is read from Windows and not counted.[/]");
+        AnsiConsole.MarkupLine("[grey]  While the TaskTracker window is open, use it instead: start, end and today's[/]");
+        AnsiConsole.MarkupLine("[grey]  report are refused, so that only one copy times tasks. Opening it carries on[/]");
+        AnsiConsole.MarkupLine("[grey]  with the task started with start.[/]");
+        AnsiConsole.WriteLine();
+
+        AnsiConsole.MarkupLine("[bold]Keys while tracking[/]");
+        var keys = new Grid().AddColumn(new GridColumn().PadLeft(2).PadRight(4)).AddColumn();
+        keys.AddRow("P", "Pause / resume the current task");
+        keys.AddRow("S", "Switch task: pick a recent one (type to search) or a new one");
+        keys.AddRow("N", "Type a new task name");
+        keys.AddRow("R", "Report: stop tracking, show today's summary\n(then I all intervals, Q quit, any other key picks a task)");
+        keys.AddRow("Q", "Stop, save, print today's summary and exit");
+        AnsiConsole.Write(keys);
+        AnsiConsole.WriteLine();
+
+        AnsiConsole.MarkupLine("Task names are free text, matched ignoring case and surrounding spaces.");
+        AnsiConsole.MarkupLine("Sleep over 5 minutes is not counted. Only one copy runs at a time.");
+        AnsiConsole.MarkupLine($"Logs: [grey]{Markup.Escape(Path.Combine(logDirectory, "yyyy-MM-dd.json"))}[/]");
+    }
+
+    /// <summary>The day's summary, or a short note for an empty day. Also used by <c>TaskTracker report</c>.</summary>
+    public static void WriteReport(DaySummary day)
+    {
+        if (day.TaskCount == 0)
+            AnsiConsole.MarkupLine($"[grey]Nothing tracked on {day.Date:ddd dd MMM yyyy}.[/]");
+        else
+            WriteSummary(day);
     }
 
     private static void WriteSummary(DaySummary day)
     {
         var table = new Table()
             .Border(TableBorder.Rounded)
-            .Title($"Today, {day.Date:ddd dd MMM yyyy}")
+            .Title($"{day.Date:dddd, dd MMM yyyy}")
             .AddColumn(new TableColumn("Task").Footer($"[bold]{day.TaskCount} task(s)[/]"))
             .AddColumn(new TableColumn("Intervals").RightAligned())
             .AddColumn(new TableColumn("First start").Centered())
@@ -258,5 +363,5 @@ public sealed class ConsoleUi(Tracker tracker, DayLogStore store)
         AnsiConsole.Write(table);
     }
 
-    private static string FormatDuration(TimeSpan duration) => $"{(int)duration.TotalHours:00}:{duration.Minutes:00}";
+    internal static string FormatDuration(TimeSpan duration) => $"{(int)duration.TotalHours:00}:{duration.Minutes:00}";
 }

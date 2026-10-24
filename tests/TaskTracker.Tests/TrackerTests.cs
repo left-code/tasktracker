@@ -244,6 +244,72 @@ public sealed class TrackerTests : IDisposable
         Assert.Equal(TimeSpan.FromMinutes(10), interval.Duration);
     }
 
+    [Fact]
+    public void StopForReport_StopsTrackingAndReturnsSavedDay()
+    {
+        _tracker.Start("A");
+        Work(minutes: 10);
+        _tracker.Start("B");
+        Work(minutes: 5);
+
+        var report = _tracker.StopForReport();
+        Work(minutes: 30);
+
+        Assert.Equal(TrackerState.Idle, _tracker.State);
+        Assert.Null(_tracker.CurrentTask);
+        Assert.Equal(TimeSpan.FromMinutes(10), report.Find("A")!.Total);
+        Assert.Equal(TimeSpan.FromMinutes(5), report.Find("B")!.Total);
+        Assert.Equal(TimeSpan.FromMinutes(15), _tracker.GetStatus().Day.Total);
+        Assert.Equal(15 * 60, _temp.Store.Load(Day).Tasks.Sum(t => t.TotalSeconds));
+    }
+
+    [Fact]
+    public void StopForReport_WhilePaused_ReturnsSavedDay()
+    {
+        _tracker.Start("A");
+        Work(minutes: 10);
+        _tracker.Pause();
+        Work(minutes: 10);
+
+        var report = _tracker.StopForReport();
+
+        Assert.Equal(TrackerState.Idle, _tracker.State);
+        Assert.Equal(TimeSpan.FromMinutes(10), report.Total);
+    }
+
+    [Fact]
+    public void StopForReport_AcrossMidnight_SavesOldDayAndReportsNewDay()
+    {
+        _time.SetUtcNow(new DateTimeOffset(2026, 10, 24, 23, 58, 0, TimeSpan.Zero));
+        _tracker.Start("Late");
+        _time.Advance(TimeSpan.FromMinutes(4)); // no heartbeat, so the rollover happens inside the report
+
+        var report = _tracker.StopForReport();
+
+        Assert.Equal(Day.AddDays(1), report.Date);
+        Assert.Equal(TimeSpan.FromMinutes(2), report.Total);
+        var before = Assert.Single(Assert.Single(_temp.Store.Load(Day).Tasks).Intervals);
+        Assert.Equal(TimeSpan.FromMinutes(2), before.Duration);
+        Assert.Equal(TrackerState.Idle, _tracker.State);
+    }
+
+    [Fact]
+    public void StopForReport_FailedSave_StopsAndIsWrittenByNextTick()
+    {
+        _tracker.Start("A");
+        Work(minutes: 10);
+
+        using (new FileStream(_temp.Store.PathFor(Day), FileMode.Open, FileAccess.Read, FileShare.None))
+            Assert.ThrowsAny<Exception>(() => _tracker.StopForReport());
+
+        Assert.Equal(TrackerState.Idle, _tracker.State);
+        _time.Advance(TimeSpan.FromMinutes(1));
+        _tracker.Tick();
+
+        var interval = Assert.Single(Assert.Single(_temp.Store.Load(Day).Tasks).Intervals);
+        Assert.Equal(TimeSpan.FromMinutes(10), interval.Duration);
+    }
+
     /// <summary>Advances the clock minute by minute with a heartbeat, like the real app.</summary>
     private void Work(int minutes, Tracker? tracker = null)
     {

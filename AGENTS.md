@@ -9,12 +9,16 @@ log format and code signing, read [README.md](README.md). This file covers how t
   It relies on Windows behaviour: console window close events, `%USERPROFILE%` paths, and a named mutex.
 - Solution: `TaskTracker.slnx` (app: `src/TaskTracker`, tests: `tests/TaskTracker.Tests`).
 - Layout of `src/TaskTracker`:
-  - `Program.cs`: single-instance mutex, 1-minute heartbeat timer, Ctrl+C/SIGHUP handlers, starts the UI.
-  - `Tracking/Tracker.cs`: all time and state logic.
-  - `Storage/DayLogStore.cs`: reads and writes the per-day JSON files.
-  - `Models/`: `DayLog`, `TaskLog`, `Interval`, which are the JSON shape.
+  - `Program.cs`: hands arguments to `UI/CommandLine.cs`; otherwise takes the single-instance mutex, picks up a
+    task left open by `start`, runs the 1-minute heartbeat timer and Ctrl+C/SIGHUP handlers, and starts the UI.
+  - `Tracking/Tracker.cs`: all time and state logic of the interactive app.
+  - `Tracking/CommandTracker.cs`: `start`/`end` without a running process (see below).
+  - `Tracking/PowerHistory.cs`: sleep, shutdown and Modern Standby periods from the Windows System event log.
+  - `Tracking/LocalClock.cs`, `Tracking/SingleInstance.cs`: shared time helpers and the mutex.
+  - `Storage/DayLogStore.cs`: reads and writes the per-day JSON files. `Storage/OpenTaskStore.cs`: `current.json`.
+  - `Models/`: `DayLog`, `TaskLog`, `Interval`, which are the JSON shape, plus `OpenTask`.
   - `Reporting/DaySummary.cs`: immutable snapshot for display.
-  - `UI/ConsoleUi.cs`: Spectre screens and prompts.
+  - `UI/ConsoleUi.cs`: Spectre screens and prompts. `UI/CommandLine.cs`: `start`, `end`, `report`, `--help`.
 
 ## Commands
 
@@ -48,7 +52,16 @@ VS Code tasks in `.vscode/tasks.json` wrap the same commands (`build`, `test`, `
   The only save inside `CatchUp` is the midnight rollover, because the old day must be written before it is
   replaced. It saves only when dirty, so a paused or idle tracker never writes empty day files.
 - Zero-length intervals are dropped in `CloseOpen`, never stored.
-- Inject `TimeProvider` and get the time through `Tracker.Now()`. Never call `DateTime.Now` directly.
+- `start`/`end` keep the running task in `current.json` and write its interval to the day logs only on `end`
+  (or on `start` of another task, or when the app opens and carries on with it). So the log format never holds an
+  unfinished interval. With no heartbeat, off time comes from `IPowerHistory` instead of `MaxGap`. Recording is
+  idempotent: the task's intervals inside start..end are replaced, never added to, so a crash before
+  `current.json` is deleted can't double-count. Recording refuses (and keeps `current.json`) when the clock is
+  more than 5 s behind the start or the interval is longer than `CommandTracker.MaxOpen` (7 days). Errors about
+  `current.json` come from `OpenTaskStore.Broken` and tell the user to fix or delete the file.
+- Only one writer at a time: the app, `start`, `end` and today's `report` all hold the single-instance mutex.
+  Only reports for other days run without it.
+- Inject `TimeProvider` and get the time through `LocalClock.Now(TimeProvider)`. Never call `DateTime.Now` directly.
   Timestamps are truncated to whole seconds.
 - The heartbeat callback in `Program.cs` catches only `IOException`, `UnauthorizedAccessException` and
   `InvalidDataException`. Any other exception on the timer thread kills the process, so code reached from

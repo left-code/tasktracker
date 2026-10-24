@@ -7,13 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-10-24
+
 ### Added
 
+- `TaskTracker report [yyyy-MM-dd]` prints a day's summary from the log and exits; without a date it reports today. Today's report refuses to run while TaskTracker is open, because that copy may still be timing a task. Other days can be reported at any time.
+- `TaskTracker start <task>` and `TaskTracker end [<task>]` time a task without keeping the window open. Starting another task switches to it. On `end`, time the PC was asleep, hibernating or switched off is read from the Windows event log and left out, and the time is split at midnight if needed. The running task is kept in `current.json` next to the logs folder. Opening the app carries on with it, and the report shows it as running. A single run longer than 7 days, or a start time later than the clock, is refused rather than recorded.
+- `TaskTracker --help` (also `-h`, `-?`, `/?`) describes the app, its commands and keys, and where logs are stored.
 - `AGENTS.md` with build, test and architecture notes for AI coding agents working on the repository.
 - MIT license.
 
 ### Changed
 
+- The `T` (today) key is replaced by `R` (report). The report stops tracking first, so no task is timed while it is on screen, and shows today's summary as saved in the log. From the report, press `I` for all intervals, `Q` to quit, or any other key to pick a task and carry on.
+- The summary table is titled with its date (for example "Saturday, 24 Oct 2026") instead of "Today", since reports can show other days.
 - The exe's author and copyright details now show "Vladimir Kozlov".
 - A new signing certificate is named `CN=Vladimir Kozlov (TaskTracker code signing)`. Certificates created with the old default name are no longer found by `Sign-Exe.ps1`, so create a new one before signing.
 
@@ -44,5 +51,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Optional self-signed code signing with the **publish + sign** task, plus scripts to create, use and trust the certificate. Signatures are timestamped, so signing needs internet access. Signing is not required to distribute the exe.
 - VS Code build, test and publish tasks, an F5 debug configuration and an xUnit test suite.
 
-[unreleased]: https://github.com/vlkozl/tasktracker/compare/v1.0.0...HEAD
+[unreleased]: https://github.com/vlkozl/tasktracker/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/vlkozl/tasktracker/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/vlkozl/tasktracker/releases/tag/v1.0.0
