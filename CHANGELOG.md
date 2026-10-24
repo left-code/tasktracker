@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.1] - 2026-10-25
+
+### Changed
+
+- The standalone `TaskTracker.exe` is about 12 MB instead of 72 MB. The bundled .NET runtime is trimmed to what the app uses and compressed. Logs and `current.json` are read and written exactly as before.
+
 ## [1.2.0] - 2026-10-25
 
 ### Added
@@ -69,7 +75,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Optional self-signed code signing with the **publish + sign** task, plus scripts to create, use and trust the certificate. Signatures are timestamped, so signing needs internet access. Signing is not required to distribute the exe.
 - VS Code build, test and publish tasks, an F5 debug configuration and an xUnit test suite.
 
-[unreleased]: https://github.com/vlkozl/tasktracker/compare/v1.2.0...HEAD
+[unreleased]: https://github.com/vlkozl/tasktracker/compare/v1.2.1...HEAD
+[1.2.1]: https://github.com/vlkozl/tasktracker/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/vlkozl/tasktracker/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/vlkozl/tasktracker/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/vlkozl/tasktracker/releases/tag/v1.0.0

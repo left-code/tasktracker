@@ -7,9 +7,16 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+  <!-- Published exe: the .NET runtime is bundled, so drop what the app never uses and compress the rest
+       (about 12 MB instead of 72 MB). JSON uses generated code (Storage/LogJson.cs) so trimming can't break it. -->
+  <PropertyGroup>
+    <PublishTrimmed>true</PublishTrimmed>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+  </PropertyGroup>
+
   <!-- Shown in the exe's Properties > Details and in Task Manager. -->
   <PropertyGroup>
-    <Version>1.2.0</Version>
+    <Version>1.2.1</Version>
     <Product>TaskTracker</Product>
     <AssemblyTitle>TaskTracker - console time tracker</AssemblyTitle>
     <Description>Tracks time spent on tasks and writes one JSON log per day.</Description>

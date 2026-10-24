@@ -490,3 +490,4 @@ $RECYCLE.BIN/
 
 # Exported signing certificates stay local (see README, Code signing)
 signing/
+temp/

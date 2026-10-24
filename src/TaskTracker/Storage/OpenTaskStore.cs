@@ -9,8 +9,6 @@ namespace TaskTracker.Storage;
 /// </summary>
 public sealed class OpenTaskStore(string path)
 {
-    private static readonly JsonSerializerOptions Options = new(JsonSerializerDefaults.Web) { WriteIndented = true };
-
     public static string DefaultPath => System.IO.Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".TaskTracker", "current.json");
 
@@ -24,7 +22,7 @@ public sealed class OpenTaskStore(string path)
         OpenTask? task;
         try
         {
-            task = JsonSerializer.Deserialize<OpenTask>(DayLogStore.WithRetry(() => File.ReadAllText(path)), Options);
+            task = JsonSerializer.Deserialize(DayLogStore.WithRetry(() => File.ReadAllText(path)), LogJson.Default.OpenTask);
         }
         catch (JsonException ex)
         {
@@ -46,7 +44,7 @@ public sealed class OpenTaskStore(string path)
     {
         Directory.CreateDirectory(System.IO.Path.GetDirectoryName(path)!);
         var tempPath = path + ".tmp";
-        var json = JsonSerializer.Serialize(task, Options);
+        var json = JsonSerializer.Serialize(task, LogJson.Default.OpenTask);
         DayLogStore.WithRetry(() =>
         {
             File.WriteAllText(tempPath, json);

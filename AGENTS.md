@@ -76,6 +76,10 @@ VS Code tasks in `.vscode/tasks.json` wrap the same commands (`build`, `test`, `
 - One file per day: `%USERPROFILE%\.TaskTracker\logs\yyyy-MM-dd.json`. The JSON is camelCase
   (`JsonSerializerDefaults.Web`) and grouped by task: `tasks[].intervals[]` with `start`/`end`/`durationSeconds`,
   plus a `totalSeconds` for each task. `DayLog.RecalculateTotals()` fills in the redundant totals on save.
+- All JSON goes through the source-generated `LogJson` context (`Storage/LogJson.cs`), never the reflection-based
+  `JsonSerializer` overloads. The published exe is trimmed (`PublishTrimmed`), and reflection could lose members
+  at run time. A new type that is written to disk needs its own `[JsonSerializable]` line. After changing
+  anything about publishing, publish and check that there are no `IL2026`/`IL3050` trim warnings.
 - Writes are atomic: write `<file>.tmp`, then `File.Move(..., overwrite: true)`.
 - Transient locks (antivirus, sync tools, the search indexer) surface as `IOException` or
   `UnauthorizedAccessException`, so always catch both. `Load` and `Save` retry up to 4 attempts, 75 ms apart.

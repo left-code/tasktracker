@@ -7,8 +7,6 @@ namespace TaskTracker.Storage;
 /// <summary>Reads and writes one JSON file per day: <c>&lt;directory&gt;\yyyy-MM-dd.json</c>.</summary>
 public sealed class DayLogStore(string directory)
 {
-    private static readonly JsonSerializerOptions Options = new(JsonSerializerDefaults.Web) { WriteIndented = true };
-
     private readonly Lock _spellingsLock = new();
     private readonly Dictionary<string, (DateOnly Date, string Spelling)> _spellings = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<DateOnly> _unread = [];
@@ -30,7 +28,7 @@ public sealed class DayLogStore(string directory)
     {
         var log = Load(date);
         log.RecalculateTotals();
-        return JsonSerializer.Serialize(log, Options);
+        return JsonSerializer.Serialize(log, LogJson.Default.DayLog);
     }
 
     public DayLog Load(DateOnly date)
@@ -42,7 +40,7 @@ public sealed class DayLogStore(string directory)
         DayLog? log;
         try
         {
-            log = JsonSerializer.Deserialize<DayLog>(WithRetry(() => File.ReadAllText(path)), Options);
+            log = JsonSerializer.Deserialize(WithRetry(() => File.ReadAllText(path)), LogJson.Default.DayLog);
         }
         catch (JsonException ex)
         {
@@ -67,7 +65,7 @@ public sealed class DayLogStore(string directory)
 
         var path = PathFor(log.Date);
         var tempPath = path + ".tmp";
-        var json = JsonSerializer.Serialize(log, Options);
+        var json = JsonSerializer.Serialize(log, LogJson.Default.DayLog);
         WithRetry(() =>
         {
             File.WriteAllText(tempPath, json);

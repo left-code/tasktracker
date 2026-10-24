@@ -13,7 +13,8 @@ dotnet run --project src/TaskTracker
 In VS Code, press **F5**. The app runs in the integrated terminal, because it needs key presses.
 
 To build a standalone `TaskTracker.exe`, run the **publish (single exe)** task. The exe is written to `publish/`.
-It doesn't need .NET installed on the target PC, and it doesn't need to be signed (see [Code signing](#code-signing-optional)).
+It is about 12 MB (the .NET runtime is bundled, trimmed to what the app uses and compressed), so it doesn't need
+.NET installed on the target PC. It doesn't need to be signed (see [Code signing](#code-signing-optional)).
 
 ## Keys
 
