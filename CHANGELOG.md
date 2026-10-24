@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `AGENTS.md` with build, test and architecture notes for AI coding agents working on the repository.
+
 ## [1.0.0] - 2026-10-24
 
 ### Added
