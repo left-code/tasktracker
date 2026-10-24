@@ -61,8 +61,9 @@ public sealed class Tracker
                     DayLog.NormalizeName(task), CurrentTask, StringComparison.OrdinalIgnoreCase))
                 return; // already working on it; don't split the interval
 
+            var name = _store.NameFor(task, _today);
             CloseOpen(now);
-            CurrentTask = _today.GetOrAddTask(task).Task;
+            CurrentTask = _today.GetOrAddTask(name).Task;
             Open(now);
             State = TrackerState.Running;
             SaveToday();
@@ -102,19 +103,6 @@ public sealed class Tracker
             CurrentTask = null;
             if (_dirty)
                 SaveToday();
-        }
-    }
-
-    /// <summary>
-    /// Stops tracking and reads today's log back from disk, so the report shows exactly what was
-    /// saved and nothing keeps ticking while it is on screen.
-    /// </summary>
-    public DaySummary StopForReport()
-    {
-        lock (_lock)
-        {
-            Stop(); // Lock is reentrant
-            return DaySummary.From(_store.Load(_today.Date));
         }
     }
 

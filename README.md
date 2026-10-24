@@ -20,9 +20,9 @@ It doesn't need .NET installed on the target PC, and it doesn't need to be signe
 | Key | Action |
 |-----|--------|
 | `P` | Pause / resume the current task |
-| `S` | Switch task: pick a recent task (type to search) or choose **+ New task...** |
-| `N` | Type a new task name straight away |
-| `R` | Report: stop tracking and show today's summary from the log. `I` lists every interval, `Q` quits, any other key picks a task to continue |
+| `S` | Switch task: pick a recent task (type to search) or choose **+ New task...**. `Esc` cancels and the current task keeps running |
+| `N` | Type a new task name straight away. `Esc` (or an empty name) cancels |
+| `R` | Report: today's summary while tracking carries on, with the running task counted up to now and updated every minute. `I` lists every interval, `Q` quits, any other key returns |
 | `Q` | Stop, save, and print today's summary |
 
 ## Commands
@@ -34,6 +34,7 @@ You don't have to keep the window open. These commands do one thing and exit:
 | `TaskTracker start <task>` | Start a task. If another one is running, it ends first (a switch) |
 | `TaskTracker end [<task>]` | End the running task and print its time. With a name, it checks that this task is the one running |
 | `TaskTracker report [yyyy-MM-dd]` | Print a day's summary; today without a date |
+| `TaskTracker report [yyyy-MM-dd] --json` | Print the day's log as JSON, for scripts |
 | `TaskTracker --help` | Commands and keys (also `-h`, `-?`, `/?`) |
 
 Quotes are optional: `TaskTracker start Fix login bug` works. The running task is kept in
@@ -43,17 +44,27 @@ System event log at the end and left out. If that log can't be read, `end` says 
 A single run can't be longer than 7 days: `end` refuses and asks you to correct the start in `current.json` (or delete
 the file to discard the task).
 
-While the TaskTracker window is open, `start`, `end` and today's report are refused, so only one copy times tasks.
+While the TaskTracker window is open, `start` and `end` are refused, so only one copy times tasks.
 When you open the window, it carries on with the task started with `start`.
-The report shows the running task as running and doesn't include it yet: its time is added when it ends.
 
-To see a report without starting the tracker, run `TaskTracker report` for today, or `TaskTracker report 2026-10-23`
-for any other day (`yyyy-MM-dd`). It prints the summary and exits. Today's report refuses while TaskTracker is running,
-because that copy may still be timing a task; press `R` in that window instead. Other days can be reported at any time.
+`TaskTracker report` prints today's summary, and `TaskTracker report 2026-10-23` any other day (`yyyy-MM-dd`).
+Reports only read the logs, so they never stop a task and work at any time:
+- a task started with `start` is shown as running and isn't in the table yet: its time is added when it ends;
+- if the TaskTracker window is open, the report says so. Its current task is included up to the last save, at
+  most a minute ago. Press `R` in the window for a live report.
+
+Add `--json` (before or after the date) to get the day's log as JSON, with nothing else on stdout, so it can be
+piped: `TaskTracker report --json | ConvertFrom-Json` or `TaskTracker report 2026-10-23 --json | jq .`.
+It is the file as the report reads it: the date comes from the file name, missing lists are filled in and the totals
+are recalculated, so it always matches `report`. A day without a file prints an empty log (`{"date": "…", "tasks": []}`).
+The notes about a running task are left out, and errors, including a broken log file, go to stderr with exit code 1.
+The format is described under [Logs](#logs).
 
 Run `TaskTracker --help` (or `-h`, `-?`, `/?`) for a summary of commands and keys.
 
 Task names are any text. Matching ignores case and surrounding spaces, so `Bug fix` and `bug fix ` count as the same task.
+A task keeps the spelling it was last logged with, however you type it later: once `TASK-1123` is in a log,
+starting `task-1123` records it as `TASK-1123`. A new task keeps the spelling you first type.
 The task picker lists tasks from the last 7 days, with the most recently used first.
 
 ## Logs

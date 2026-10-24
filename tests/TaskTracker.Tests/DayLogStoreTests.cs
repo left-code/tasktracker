@@ -97,6 +97,129 @@ public sealed class DayLogStoreTests : IDisposable
         Assert.Equal(["Write docs", "Review", "Old"], names);
     }
 
+    [Fact]
+    public void KnownSpelling_UsesMostRecentDayBeforeTheGivenDate()
+    {
+        var older = new DayLog { Date = Day.AddDays(-30) };
+        older.GetOrAddTask("task-1123").Intervals.Add(Interval(9, 0, 10, 0, Day.AddDays(-30)));
+        _temp.Store.Save(older);
+        var recent = new DayLog { Date = Day.AddDays(-2) };
+        recent.GetOrAddTask("TASK-1123").Intervals.Add(Interval(9, 0, 10, 0, Day.AddDays(-2)));
+        _temp.Store.Save(recent);
+        var today = new DayLog { Date = Day };
+        today.GetOrAddTask("Task-1123").Intervals.Add(Interval(9, 0, 10, 0));
+        _temp.Store.Save(today);
+
+        Assert.Equal("TASK-1123", _temp.Store.KnownSpelling(" task-1123 ", before: Day));
+        Assert.Equal("Task-1123", _temp.Store.KnownSpelling("task-1123", before: Day.AddDays(1)));
+        Assert.Null(_temp.Store.KnownSpelling("task-11", before: Day.AddDays(1)));
+    }
+
+    [Fact]
+    public void KnownSpelling_SkipsBrokenFilesAndOtherFiles()
+    {
+        var old = new DayLog { Date = Day.AddDays(-5) };
+        old.GetOrAddTask("Review").Intervals.Add(Interval(9, 0, 10, 0, Day.AddDays(-5)));
+        _temp.Store.Save(old);
+        File.WriteAllText(_temp.Store.PathFor(Day.AddDays(-1)), "{ broken");
+        File.WriteAllText(Path.Combine(_temp.Directory, "notes.json"), "{}");
+
+        Assert.Equal("Review", _temp.Store.KnownSpelling("REVIEW", before: Day));
+    }
+
+    [Fact]
+    public void KnownSpelling_SkipsLockedFiles_AndReadsThemNextTime()
+    {
+        var old = new DayLog { Date = Day.AddDays(-5) };
+        old.GetOrAddTask("Review").Intervals.Add(Interval(9, 0, 10, 0, Day.AddDays(-5)));
+        _temp.Store.Save(old);
+        var locked = new DayLog { Date = Day.AddDays(-1) };
+        locked.GetOrAddTask("REVIEW").Intervals.Add(Interval(9, 0, 10, 0, Day.AddDays(-1)));
+        _temp.Store.Save(locked);
+
+        using (File.Open(_temp.Store.PathFor(Day.AddDays(-1)), FileMode.Open, FileAccess.Read, FileShare.None))
+        {
+            Assert.Equal("Review", _temp.Store.KnownSpelling("review", before: Day));
+            Assert.Equal(["Review"], _temp.Store.RecentTaskNames(Day, days: 7));
+        }
+
+        Assert.Equal("REVIEW", _temp.Store.KnownSpelling("review", before: Day));
+    }
+
+    [Fact]
+    public void KnownSpelling_FindsDaysLoggedAfterTheFirstLookup()
+    {
+        Assert.Null(_temp.Store.KnownSpelling("Review", before: Day));
+
+        var today = new DayLog { Date = Day };
+        today.GetOrAddTask("REVIEW").Intervals.Add(Interval(9, 0, 10, 0));
+        _temp.Store.Save(today);
+
+        Assert.Null(_temp.Store.KnownSpelling("Review", before: Day));
+        Assert.Equal("REVIEW", _temp.Store.KnownSpelling("Review", before: Day.AddDays(1)));
+        Assert.Null(_temp.Store.KnownSpelling("Review", before: Day)); // clock set back
+    }
+
+    [Fact]
+    public void NameFor_PrefersTodaysSpelling_ThenEarlierDays_ThenTheTypedName()
+    {
+        var older = new DayLog { Date = Day.AddDays(-3) };
+        older.GetOrAddTask("TASK-1").Intervals.Add(Interval(9, 0, 10, 0, Day.AddDays(-3)));
+        older.GetOrAddTask("TASK-2").Intervals.Add(Interval(10, 0, 11, 0, Day.AddDays(-3)));
+        _temp.Store.Save(older);
+        var today = new DayLog { Date = Day };
+        today.GetOrAddTask("Task-1").Intervals.Add(Interval(9, 0, 10, 0));
+        _temp.Store.Save(today);
+
+        Assert.Equal("Task-1", _temp.Store.NameFor("task-1", Day));
+        Assert.Equal("TASK-2", _temp.Store.NameFor("task-2", Day));
+        Assert.Equal("new One", _temp.Store.NameFor(" new One ", Day));
+    }
+
+    [Fact]
+    public void ReadJson_ReturnsTheLogAsLoaded()
+    {
+        System.IO.Directory.CreateDirectory(_temp.Directory);
+        File.WriteAllText(_temp.Store.PathFor(Day), """
+            { "date": "2026-01-01", "tasks": [
+              { "task": "A", "totalSeconds": 1, "intervals": [
+                { "start": "2026-10-24T09:00:00+02:00", "end": "2026-10-24T09:10:00+02:00", "durationSeconds": 1 } ] },
+              { "task": "B", "intervals": null } ] }
+            """);
+
+        var json = _temp.Store.ReadJson(Day);
+
+        Assert.Contains("\"date\": \"2026-10-24\"", json);
+        Assert.Contains("\"totalSeconds\": 600", json);
+        Assert.Contains("\"durationSeconds\": 600", json);
+        Assert.Contains("\"intervals\": []", json);
+    }
+
+    [Fact]
+    public void ReadJson_BrokenFile_Throws()
+    {
+        System.IO.Directory.CreateDirectory(_temp.Directory);
+        File.WriteAllText(_temp.Store.PathFor(Day), "{ broken");
+
+        Assert.Throws<InvalidDataException>(() => _temp.Store.ReadJson(Day));
+    }
+
+    [Fact]
+    public void ReadJson_MissingDay_ReturnsAnEmptyLogInTheSameShape()
+    {
+        var json = _temp.Store.ReadJson(Day);
+
+        Assert.Contains("\"date\": \"2026-10-24\"", json);
+        Assert.Contains("\"tasks\": []", json);
+        Assert.False(File.Exists(_temp.Store.PathFor(Day)));
+    }
+
+    [Fact]
+    public void KnownSpelling_NoLogDirectory_ReturnsNull()
+    {
+        Assert.Null(_temp.Store.KnownSpelling("A", before: Day));
+    }
+
     private static Interval Interval(int h1, int m1, int h2, int m2, DateOnly? date = null)
     {
         var d = date ?? Day;

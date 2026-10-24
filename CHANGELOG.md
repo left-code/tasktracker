@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-10-25
+
+### Added
+
+- `Esc` in the switch-task picker (`S`) cancels, like choosing **<- Cancel**, and the current task keeps running. `Esc` also cancels typing a new task name (`N`, or **+ New task...** in the picker), as an empty name already did.
+- `TaskTracker report [yyyy-MM-dd] --json` prints the day's log as JSON, with nothing else on stdout, for scripts. It matches what the report shows: the date comes from the file name and the totals are recalculated. A day without a log prints an empty log in the same shape, and a broken log is an error on stderr with exit code 1.
+
+### Changed
+
+- The `R` report no longer stops tracking. It shows today's summary with the running task counted up to now, updated every minute, and marked as running; any key returns to the status screen.
+- `TaskTracker report` works while the TaskTracker window is open. It shows the log as last saved (at most a minute behind) and notes that the window is open.
+- A task keeps the spelling it was last logged with on any earlier day, however it is typed later. Before, each day kept the spelling first typed that day, so `TASK-1123` and `task-1123` could appear on different days. A new task keeps the spelling it is first typed with.
+
+### Fixed
+
+- A log file locked for longer than the retries (antivirus, sync tools, the search indexer) no longer stops the task picker from opening. The file is skipped and its tasks are left out of the list until it can be read.
+- If saving fails when the first task starts, the app no longer crashes on startup. It keeps tracking and retries the save every minute, as it already did for later saves.
+
 ## [1.1.0] - 2026-10-24
 
 ### Added
@@ -51,6 +69,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Optional self-signed code signing with the **publish + sign** task, plus scripts to create, use and trust the certificate. Signatures are timestamped, so signing needs internet access. Signing is not required to distribute the exe.
 - VS Code build, test and publish tasks, an F5 debug configuration and an xUnit test suite.
 
-[unreleased]: https://github.com/vlkozl/tasktracker/compare/v1.1.0...HEAD
+[unreleased]: https://github.com/vlkozl/tasktracker/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/vlkozl/tasktracker/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/vlkozl/tasktracker/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/vlkozl/tasktracker/releases/tag/v1.0.0

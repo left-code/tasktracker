@@ -39,8 +39,10 @@ public sealed class CommandTracker(DayLogStore logs, OpenTaskStore openTask, IPo
         if (current is not null && current.Is(task))
             return new StartedTask(current, null, AlreadyRunning: true);
 
+        // Looked up before anything is written, so if it fails nothing has changed.
+        var name = logs.NameFor(task, LocalClock.DateOf(now));
         var ended = current is null ? null : Record(current, now);
-        var started = new OpenTask { Task = DayLog.NormalizeName(task), Start = now };
+        var started = new OpenTask { Task = name, Start = now };
         openTask.Save(started);
         return new StartedTask(started, ended, AlreadyRunning: false);
     }

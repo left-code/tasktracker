@@ -245,69 +245,36 @@ public sealed class TrackerTests : IDisposable
     }
 
     [Fact]
-    public void StopForReport_StopsTrackingAndReturnsSavedDay()
+    public void Start_TaskFromAnEarlierDay_KeepsItsSpelling()
     {
-        _tracker.Start("A");
-        Work(minutes: 10);
-        _tracker.Start("B");
+        _tracker.Start("TASK-1123");
         Work(minutes: 5);
+        _tracker.Stop();
+        _time.Advance(TimeSpan.FromDays(3));
 
-        var report = _tracker.StopForReport();
-        Work(minutes: 30);
+        var later = new Tracker(_temp.Store, _time);
+        later.Start("task-1123 ");
+        Work(minutes: 1, later);
+        later.Start("new Task");
 
-        Assert.Equal(TrackerState.Idle, _tracker.State);
-        Assert.Null(_tracker.CurrentTask);
-        Assert.Equal(TimeSpan.FromMinutes(10), report.Find("A")!.Total);
-        Assert.Equal(TimeSpan.FromMinutes(5), report.Find("B")!.Total);
-        Assert.Equal(TimeSpan.FromMinutes(15), _tracker.GetStatus().Day.Total);
-        Assert.Equal(15 * 60, _temp.Store.Load(Day).Tasks.Sum(t => t.TotalSeconds));
+        Assert.Equal("new Task", later.CurrentTask);
+        var names = _temp.Store.Load(Day.AddDays(3)).Tasks.Select(t => t.Task);
+        Assert.Equal(["TASK-1123", "new Task"], names);
     }
 
     [Fact]
-    public void StopForReport_WhilePaused_ReturnsSavedDay()
+    public void Start_WhileAnOldLogIsLocked_StillStarts()
     {
-        _tracker.Start("A");
-        Work(minutes: 10);
-        _tracker.Pause();
-        Work(minutes: 10);
+        var yesterday = new DateTimeOffset(2026, 10, 23, 9, 0, 0, TimeSpan.Zero);
+        var old = new Models.DayLog { Date = Day.AddDays(-1) };
+        old.GetOrAddTask("Review").Intervals.Add(new Models.Interval { Start = yesterday, End = yesterday.AddHours(1) });
+        _temp.Store.Save(old);
 
-        var report = _tracker.StopForReport();
+        using (File.Open(_temp.Store.PathFor(Day.AddDays(-1)), FileMode.Open, FileAccess.Read, FileShare.None))
+            _tracker.Start("review");
 
-        Assert.Equal(TrackerState.Idle, _tracker.State);
-        Assert.Equal(TimeSpan.FromMinutes(10), report.Total);
-    }
-
-    [Fact]
-    public void StopForReport_AcrossMidnight_SavesOldDayAndReportsNewDay()
-    {
-        _time.SetUtcNow(new DateTimeOffset(2026, 10, 24, 23, 58, 0, TimeSpan.Zero));
-        _tracker.Start("Late");
-        _time.Advance(TimeSpan.FromMinutes(4)); // no heartbeat, so the rollover happens inside the report
-
-        var report = _tracker.StopForReport();
-
-        Assert.Equal(Day.AddDays(1), report.Date);
-        Assert.Equal(TimeSpan.FromMinutes(2), report.Total);
-        var before = Assert.Single(Assert.Single(_temp.Store.Load(Day).Tasks).Intervals);
-        Assert.Equal(TimeSpan.FromMinutes(2), before.Duration);
-        Assert.Equal(TrackerState.Idle, _tracker.State);
-    }
-
-    [Fact]
-    public void StopForReport_FailedSave_StopsAndIsWrittenByNextTick()
-    {
-        _tracker.Start("A");
-        Work(minutes: 10);
-
-        using (new FileStream(_temp.Store.PathFor(Day), FileMode.Open, FileAccess.Read, FileShare.None))
-            Assert.ThrowsAny<Exception>(() => _tracker.StopForReport());
-
-        Assert.Equal(TrackerState.Idle, _tracker.State);
-        _time.Advance(TimeSpan.FromMinutes(1));
-        _tracker.Tick();
-
-        var interval = Assert.Single(Assert.Single(_temp.Store.Load(Day).Tasks).Intervals);
-        Assert.Equal(TimeSpan.FromMinutes(10), interval.Duration);
+        Assert.Equal(TrackerState.Running, _tracker.State);
+        Assert.Equal("review", _tracker.CurrentTask);
     }
 
     /// <summary>Advances the clock minute by minute with a heartbeat, like the real app.</summary>

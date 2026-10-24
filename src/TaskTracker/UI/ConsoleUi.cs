@@ -1,4 +1,6 @@
+using System.Globalization;
 using System.Reflection;
+using System.Text;
 using Spectre.Console;
 using Spectre.Console.Rendering;
 using TaskTracker.Reporting;
@@ -24,22 +26,25 @@ public sealed class ConsoleUi(Tracker tracker, DayLogStore store)
         if (status.Day.TaskCount > 0)
             WriteSummary(status.Day);
 
-        tracker.Start(continueTask ?? PickTask(allowCancel: false)!);
+        var task = continueTask ?? PickTask(allowCancel: false)!;
+        var running = true;
+        CarryOnIfSaveFails(() => tracker.Start(task));
+        while (running)
+            CarryOnIfSaveFails(() => running = HandleNextAction());
+    }
 
-        while (true)
+    private static void CarryOnIfSaveFails(Action action)
+    {
+        try
         {
-            try
-            {
-                if (!HandleNextAction())
-                    return;
-            }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException)
-            {
-                // The tracker keeps its state and the heartbeat retries the save, so carry on.
-                AnsiConsole.MarkupLine($"[red]Could not save the log:[/] {Markup.Escape(ex.Message)}");
-                AnsiConsole.MarkupLine("[grey]Tracking continues and saving is retried every minute. Press any key.[/]");
-                Console.ReadKey(intercept: true);
-            }
+            action();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException)
+        {
+            // The tracker keeps its state and the heartbeat retries the save, so carry on.
+            AnsiConsole.MarkupLine($"[red]Could not save the log:[/] {Markup.Escape(ex.Message)}");
+            AnsiConsole.MarkupLine("[grey]Tracking continues and saving is retried every minute. Press any key.[/]");
+            Console.ReadKey(intercept: true);
         }
     }
 
@@ -173,14 +178,17 @@ public sealed class ConsoleUi(Tracker tracker, DayLogStore store)
             return AskNewTask(allowCancel);
 
         var prompt = new SelectionPrompt<string>()
-            .Title("Select a task [grey](type to search)[/]:")
+            .Title(allowCancel ? "Select a task [grey](type to search, Esc to cancel)[/]:" : "Select a task [grey](type to search)[/]:")
             .PageSize(15)
             .EnableSearch()
             .UseConverter(Markup.Escape)
             .AddChoices(NewTaskChoice)
             .AddChoices(recent);
         if (allowCancel)
+        {
             prompt.AddChoice(CancelChoice);
+            prompt.AddCancelResult(CancelChoice); // Esc does the same as choosing Cancel
+        }
 
         var choice = AnsiConsole.Prompt(prompt);
         return choice switch
@@ -193,52 +201,99 @@ public sealed class ConsoleUi(Tracker tracker, DayLogStore store)
 
     private static string? AskNewTask(bool allowCancel)
     {
-        var prompt = new TextPrompt<string>(allowCancel ? "Task name [grey](empty to cancel)[/]:" : "Task name:");
-        if (allowCancel)
-            prompt.AllowEmpty();
+        if (!allowCancel)
+            return AnsiConsole.Prompt(new TextPrompt<string>("Task name:")).Trim();
 
-        var name = AnsiConsole.Prompt(prompt).Trim();
-        return name.Length == 0 ? null : name;
+        AnsiConsole.Markup("Task name [grey](Esc or empty to cancel)[/]: ");
+        var name = ReadLineOrEscape()?.Trim();
+        return string.IsNullOrEmpty(name) ? null : name;
     }
 
     /// <summary>
-    /// Stops tracking and shows today's report until the user starts a task (returns true) or quits (false).
+    /// Reads a line of text, returning null on Esc. Spectre's TextPrompt can't be cancelled with Esc,
+    /// so this handles just the keys a task name needs: characters, Backspace, Enter and Esc.
+    /// </summary>
+    private static string? ReadLineOrEscape()
+    {
+        var start = Console.GetCursorPosition();
+        var text = new StringBuilder();
+        while (true)
+        {
+            var key = Console.ReadKey(intercept: true);
+            switch (key.Key)
+            {
+                case ConsoleKey.Escape:
+                    Console.WriteLine();
+                    return null;
+
+                case ConsoleKey.Enter:
+                    Console.WriteLine();
+                    return text.ToString();
+
+                case ConsoleKey.Backspace when text.Length > 0:
+                    // a whole character, even one made of several chars (emoji, accents)
+                    var erased = text.Length - StringInfo.ParseCombiningCharacters(text.ToString())[^1];
+                    text.Length -= erased;
+                    Redraw(text, start, erased);
+                    break;
+
+                default:
+                    if (char.IsControl(key.KeyChar))
+                        break;
+                    text.Append(key.KeyChar);
+                    if (!char.IsHighSurrogate(key.KeyChar)) // otherwise wait for the other half
+                        Redraw(text, start, erased: 0);
+                    break;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Writes the text again from where it starts, instead of stepping back one cell per character:
+    /// wide characters and the console's delayed wrap at the end of a line make cell counting unreliable.
+    /// </summary>
+    private static void Redraw(StringBuilder text, (int Left, int Top) start, int erased)
+    {
+        Console.SetCursorPosition(start.Left, start.Top);
+        Console.Write(text.ToString());
+        var (left, top) = Console.GetCursorPosition();
+        Console.Write(new string(' ', 2 * erased)); // an erased char takes up to two cells
+        Console.SetCursorPosition(left, top);
+    }
+
+    /// <summary>
+    /// Shows today's report while tracking carries on. It is redrawn whenever what it shows changes
+    /// (once a minute while a task runs), so the running task stays counted up to now.
+    /// Returns false when the user quits from it.
     /// </summary>
     private bool ShowReport()
     {
-        DaySummary day;
-        string? warning = null;
-        try
-        {
-            day = tracker.StopForReport();
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException)
-        {
-            // A failed midnight save aborts Stop before it stops: the task is still ticking, so no report.
-            if (tracker.State != TrackerState.Idle)
-                throw;
-
-            // Stopped in memory, but the log could not be saved or read back. Show the in-memory
-            // times; the heartbeat retries the save.
-            day = tracker.GetStatus().Day;
-            warning = $"[yellow]Could not save or read back the log:[/] {Markup.Escape(ex.Message)}\n" +
-                      "[grey]Showing times from memory. Saving is retried every minute.[/]";
-        }
-
         while (true)
         {
-            AnsiConsole.Clear();
-            WriteReport(day);
-            if (warning is not null)
-                AnsiConsole.MarkupLine(warning);
-            AnsiConsole.MarkupLine("[grey]Tracking is stopped.   [[I]] all intervals   [[Q]] quit   any other key to start a task[/]");
+            var shown = "";
+            while (!Console.KeyAvailable)
+            {
+                var status = tracker.GetStatus();
+                var line = ReportStatusLine(status);
+                var text = line + string.Concat(status.Day.Tasks.Select(
+                    t => $"\n{t.Task}|{t.IntervalCount}|{t.LastEnd:HH:mm}|{FormatDuration(t.Total)}"));
+                if (text != shown)
+                {
+                    shown = text;
+                    AnsiConsole.Clear();
+                    WriteReport(status.Day);
+                    AnsiConsole.MarkupLine(line);
+                    AnsiConsole.MarkupLine("[grey][[I]] all intervals   [[Q]] quit   any other key to return[/]");
+                }
+                Thread.Sleep(KeyPollInterval);
+            }
 
             switch (Console.ReadKey(intercept: true).Key)
             {
                 case ConsoleKey.I:
                     AnsiConsole.Clear();
-                    WriteIntervals(day);
-                    AnsiConsole.MarkupLine("[grey]Press any key to return[/]");
+                    WriteIntervals(tracker.GetStatus().Day);
+                    AnsiConsole.MarkupLine("[grey]Press any key to return to the report[/]");
                     Console.ReadKey(intercept: true);
                     break;
 
@@ -247,25 +302,20 @@ public sealed class ConsoleUi(Tracker tracker, DayLogStore store)
                     return false;
 
                 default:
-                    AnsiConsole.Clear();
-                    string? task;
-                    try
-                    {
-                        task = PickTask(allowCancel: true);
-                    }
-                    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-                    {
-                        // Reading recent tasks failed; stay on the report rather than show a stopped
-                        // tracker as if it were paused.
-                        warning = $"[yellow]Could not read recent tasks:[/] {Markup.Escape(ex.Message)}";
-                        break;
-                    }
-                    if (task is null)
-                        break; // cancelled: back to the report
-                    tracker.Start(task);
                     return true;
             }
         }
+    }
+
+    private static string ReportStatusLine(TrackerStatus status)
+    {
+        var task = Markup.Escape(status.CurrentTask ?? "");
+        return status.State switch
+        {
+            TrackerState.Running => $"[green]▶ {task} is running[/] [grey]({FormatDuration(status.CurrentTaskTotal)} today, counted up to now)[/]",
+            TrackerState.Paused => $"[yellow]⏸ {task} is paused[/]",
+            _ => "[grey]No task is running.[/]",
+        };
     }
 
     /// <summary>Output of <c>TaskTracker --help</c>.</summary>
@@ -286,26 +336,28 @@ public sealed class ConsoleUi(Tracker tracker, DayLogStore store)
         commands.AddRow("TaskTracker end [[<task>]]", "End the task started with [bold]start[/]");
         commands.AddRow("TaskTracker report", "Print today's summary and exit");
         commands.AddRow("TaskTracker report [[yyyy-MM-dd]]", "Print another day's summary");
+        commands.AddRow("TaskTracker report ... --json", "Print the day's log as JSON, for scripts");
         commands.AddRow("TaskTracker --help", "Show this help (also [bold]-h[/], [bold]-?[/], [bold]/?[/])");
         AnsiConsole.Write(commands);
         AnsiConsole.MarkupLine("[grey]  start on another task switches to it. Quotes around task names are optional.[/]");
         AnsiConsole.MarkupLine("[grey]  Time the PC was asleep or off is read from Windows and not counted.[/]");
-        AnsiConsole.MarkupLine("[grey]  While the TaskTracker window is open, use it instead: start, end and today's[/]");
-        AnsiConsole.MarkupLine("[grey]  report are refused, so that only one copy times tasks. Opening it carries on[/]");
+        AnsiConsole.MarkupLine("[grey]  While the TaskTracker window is open, use it instead: start and end are[/]");
+        AnsiConsole.MarkupLine("[grey]  refused, so that only one copy times tasks. Opening it carries on[/]");
         AnsiConsole.MarkupLine("[grey]  with the task started with start.[/]");
         AnsiConsole.WriteLine();
 
         AnsiConsole.MarkupLine("[bold]Keys while tracking[/]");
         var keys = new Grid().AddColumn(new GridColumn().PadLeft(2).PadRight(4)).AddColumn();
         keys.AddRow("P", "Pause / resume the current task");
-        keys.AddRow("S", "Switch task: pick a recent one (type to search) or a new one");
-        keys.AddRow("N", "Type a new task name");
-        keys.AddRow("R", "Report: stop tracking, show today's summary\n(then I all intervals, Q quit, any other key picks a task)");
+        keys.AddRow("S", "Switch task: pick a recent one (type to search) or a new one;\nEsc cancels and keeps the current task running");
+        keys.AddRow("N", "Type a new task name (Esc or empty cancels)");
+        keys.AddRow("R", "Report: today's summary, the running task counted up to now\n(then I all intervals, Q quit, any other key returns)");
         keys.AddRow("Q", "Stop, save, print today's summary and exit");
         AnsiConsole.Write(keys);
         AnsiConsole.WriteLine();
 
         AnsiConsole.MarkupLine("Task names are free text, matched ignoring case and surrounding spaces.");
+        AnsiConsole.MarkupLine("A task keeps the spelling it was logged with before; a new one keeps yours.");
         AnsiConsole.MarkupLine("Sleep over 5 minutes is not counted. Only one copy runs at a time.");
         AnsiConsole.MarkupLine($"Logs: [grey]{Markup.Escape(Path.Combine(logDirectory, "yyyy-MM-dd.json"))}[/]");
     }

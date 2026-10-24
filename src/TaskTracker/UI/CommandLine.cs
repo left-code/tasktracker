@@ -11,16 +11,20 @@ namespace TaskTracker.UI;
 public static class CommandLine
 {
     private const string Usage =
-        "Usage: [bold]TaskTracker[/] [[start <task> | end [[<task>]] | report [[yyyy-MM-dd]]]]   (see [bold]TaskTracker --help[/])";
+        "Usage: [bold]TaskTracker[/] [[start <task> | end [[<task>]] | report [[yyyy-MM-dd]] [[--json]]]]   (see [bold]TaskTracker --help[/])";
 
     private const string AppIsOpen =
         "[red]TaskTracker is open.[/] Switch or stop tasks in that window, or quit it first.";
+
+    /// <summary>How often the open app saves its running interval (its heartbeat), plus some slack.</summary>
+    private static readonly TimeSpan AppSaveInterval = TimeSpan.FromMinutes(2);
 
     public static int Run(string[] args, DayLogStore logs, CommandTracker commands, TimeProvider time)
     {
         // Task names may be typed without quotes: "TaskTracker start Fix login bug".
         var rest = string.Join(' ', args.Skip(1)).Trim();
-        var today = LocalClock.DateOf(LocalClock.Now(time));
+        var now = LocalClock.Now(time);
+        var today = LocalClock.DateOf(now);
 
         switch (args[0].ToLowerInvariant())
         {
@@ -34,17 +38,11 @@ public static class CommandLine
             case "end":
                 return Exclusive(AppIsOpen, () => End(commands, rest.Length == 0 ? null : rest, today));
 
-            case "report" when rest.Length == 0:
-                // Holding the mutex means the app isn't running, so today's log on disk is final.
-                return Exclusive(
-                    "[red]TaskTracker is running, so a task may still be ticking.[/] Press [bold]R[/] in that window for the report, or quit it first.",
-                    () => Report(logs, commands, today, today));
-
-            case "report" when DateOnly.TryParseExact(rest, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var day):
-                // Only today can still be ticking in the app, so other days are reported even while it runs.
-                return day == today
-                    ? Run(["report"], logs, commands, time)
-                    : Guarded(() => Report(logs, commands, day, today));
+            // Reports only read the logs, so they run even while the app is open and timing a task.
+            case "report" when ParseReportArgs(args.Skip(1)) is { } report:
+                return report.Json
+                    ? WriteJson(logs, report.Day ?? today)
+                    : Guarded(() => Report(logs, commands, report.Day ?? today, now));
 
             default:
                 AnsiConsole.MarkupLine(Usage);
@@ -88,19 +86,72 @@ public static class CommandLine
         return 0;
     }
 
-    private static int Report(DayLogStore logs, CommandTracker commands, DateOnly day, DateOnly today)
+    private static int Report(DayLogStore logs, CommandTracker commands, DateOnly day, DateTimeOffset now)
     {
-        ConsoleUi.WriteReport(DaySummary.From(logs.Load(day)));
+        var today = LocalClock.DateOf(now);
+        var log = logs.Load(day);
+        ConsoleUi.WriteReport(DaySummary.From(log));
 
-        // The running task's time is written only when it ends, so it is not in the table yet.
-        if (commands.Current is { } open && LocalClock.DateOf(open.Start) <= day && day <= today)
+        // The running task's time is written only when it ends, so it is not in the table yet. If the
+        // table already has time for it since its start, an end is being written right now: say nothing,
+        // or that time would look as if it should be counted twice.
+        if (commands.Current is { } open && LocalClock.DateOf(open.Start) <= day && day <= today &&
+            log.FindTask(open.Task)?.Intervals.Any(i => i.Start >= open.Start) != true)
         {
             AnsiConsole.MarkupLine(
                 $"[yellow]▶ {Markup.Escape(open.Task)} is running since {Time(open.Start, day)}, not included above.[/] " +
                 "[grey]End it with TaskTracker end.[/]");
         }
+
+        // The app saves its running interval every minute, but this copy can't tell which task that is.
+        // Just after midnight, the app may not have written the end of yesterday's interval yet.
+        var appMayBeBehind = day == today ||
+            (day == today.AddDays(-1) && now.TimeOfDay < AppSaveInterval);
+        if (appMayBeBehind && SingleInstance.IsHeld())
+        {
+            AnsiConsole.MarkupLine(
+                "[yellow]▶ TaskTracker is open and may be timing a task.[/] " +
+                "[grey]Its time is included up to the last save (at most a minute ago). Press R there for a live report.[/]");
+        }
         if (File.Exists(logs.PathFor(day)))
             AnsiConsole.MarkupLine($"[grey]Log: {Markup.Escape(logs.PathFor(day))}[/]");
+        return 0;
+    }
+
+    /// <summary>An optional date and an optional <c>--json</c>, in either order; null if anything else is given.</summary>
+    private static (DateOnly? Day, bool Json)? ParseReportArgs(IEnumerable<string> args)
+    {
+        DateOnly? day = null;
+        var json = false;
+        foreach (var arg in args)
+        {
+            if (!json && string.Equals(arg, "--json", StringComparison.OrdinalIgnoreCase))
+                json = true;
+            else if (day is null && DateOnly.TryParseExact(arg, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var date))
+                day = date;
+            else
+                return null;
+        }
+        return (day, json);
+    }
+
+    /// <summary>
+    /// The day's log as JSON, for scripts: nothing else goes to stdout (no notes about a running
+    /// task), and errors go to stderr so they can't be mistaken for JSON.
+    /// </summary>
+    private static int WriteJson(DayLogStore logs, DateOnly day)
+    {
+        string json;
+        try
+        {
+            json = logs.ReadJson(day);
+        }
+        catch (Exception ex) when (ex is InvalidDataException or IOException or UnauthorizedAccessException)
+        {
+            Console.Error.WriteLine(ex.Message);
+            return 1;
+        }
+        Console.Out.Write(json);
         return 0;
     }
 

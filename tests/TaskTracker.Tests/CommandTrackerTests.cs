@@ -331,6 +331,38 @@ public sealed class CommandTrackerTests : IDisposable
     }
 
     [Fact]
+    public void Start_TaskSeenBefore_KeepsItsSpelling()
+    {
+        _commands.Start("TASK-1123");
+        _time.Advance(TimeSpan.FromMinutes(10));
+        _commands.End();
+        _time.Advance(TimeSpan.FromDays(2));
+
+        _commands.Start("task-1123");
+        Assert.Equal("TASK-1123", _open.Load()!.Task);
+
+        _commands.Start(" brand New ");
+        Assert.Equal("brand New", _open.Load()!.Task);
+    }
+
+    [Fact]
+    public void Start_AnotherTaskWhileAnOldLogIsLocked_StillSwitches()
+    {
+        _commands.Start("A");
+        _time.Advance(TimeSpan.FromMinutes(30));
+        var old = new Models.DayLog { Date = Day.AddDays(-1) };
+        _temp.Store.Save(old);
+
+        StartedTask result;
+        using (File.Open(_temp.Store.PathFor(Day.AddDays(-1)), FileMode.Open, FileAccess.Read, FileShare.None))
+            result = _commands.Start("B");
+
+        Assert.Equal(TimeSpan.FromMinutes(30), result.Ended!.Worked);
+        Assert.Equal("B", _open.Load()!.Task);
+        Assert.Equal(TimeSpan.FromMinutes(30), Total(Day, "A"));
+    }
+
+    [Fact]
     public void Load_OpenTaskWithoutStart_Throws()
     {
         Directory.CreateDirectory(_temp.Directory);

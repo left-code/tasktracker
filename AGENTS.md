@@ -59,8 +59,12 @@ VS Code tasks in `.vscode/tasks.json` wrap the same commands (`build`, `test`, `
   `current.json` is deleted can't double-count. Recording refuses (and keeps `current.json`) when the clock is
   more than 5 s behind the start or the interval is longer than `CommandTracker.MaxOpen` (7 days). Errors about
   `current.json` come from `OpenTaskStore.Broken` and tell the user to fix or delete the file.
-- Only one writer at a time: the app, `start`, `end` and today's `report` all hold the single-instance mutex.
-  Only reports for other days run without it.
+- Only one writer at a time: the app, `start` and `end` hold the single-instance mutex. `report` only reads, so it
+  runs without it. To say whether the app is open it only looks (`SingleInstance.IsHeld`, `Mutex.TryOpenExisting`):
+  taking the mutex, even briefly, would make the app or a command refuse to start. The `R` report never stops tracking.
+- `DayLogStore.NameFor` decides the spelling a task is logged under; use it from every entry point. The spelling
+  lookup reads each older day file once per process and keeps the names, because only the running copy writes
+  and it writes today's file. Reading old files for names skips broken and locked files, so they never block a start.
 - Inject `TimeProvider` and get the time through `LocalClock.Now(TimeProvider)`. Never call `DateTime.Now` directly.
   Timestamps are truncated to whole seconds.
 - The heartbeat callback in `Program.cs` catches only `IOException`, `UnauthorizedAccessException` and
