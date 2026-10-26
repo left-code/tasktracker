@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-10-26
+
+### Added
+
+- `E` ends the current task (running or paused) without closing the window. The status screen shows **No task running** and nothing is timed until `S` or `N` starts the next task.
+
 ## [1.2.1] - 2026-10-25
 
 ### Changed
@@ -75,7 +81,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Optional self-signed code signing with the **publish + sign** task, plus scripts to create, use and trust the certificate. Signatures are timestamped, so signing needs internet access. Signing is not required to distribute the exe.
 - VS Code build, test and publish tasks, an F5 debug configuration and an xUnit test suite.
 
-[unreleased]: https://github.com/vlkozl/tasktracker/compare/v1.2.1...HEAD
+[unreleased]: https://github.com/vlkozl/tasktracker/compare/v1.3.0...HEAD
+[1.3.0]: https://github.com/vlkozl/tasktracker/compare/v1.2.1...v1.3.0
 [1.2.1]: https://github.com/vlkozl/tasktracker/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/vlkozl/tasktracker/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/vlkozl/tasktracker/compare/v1.0.0...v1.1.0

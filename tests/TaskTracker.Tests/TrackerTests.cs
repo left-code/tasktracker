@@ -78,6 +78,42 @@ public sealed class TrackerTests : IDisposable
     }
 
     [Fact]
+    public void Stop_StaysIdleUntilNextStart()
+    {
+        _tracker.Start("A");
+        Work(minutes: 10);
+        _tracker.Stop();
+        Work(minutes: 20);
+        _tracker.Resume(); // P while idle: nothing to resume
+        Assert.Equal(TrackerState.Idle, _tracker.State);
+        Assert.Null(_tracker.GetStatus().CurrentTask);
+        _tracker.Start("B");
+        Work(minutes: 5);
+        _tracker.Stop();
+
+        var day = _temp.Store.Load(Day);
+        Assert.Equal(TimeSpan.FromMinutes(10), Assert.Single(day.Tasks, t => t.Task == "A").Intervals.Single().Duration);
+        Assert.Equal(TimeSpan.FromMinutes(5), Assert.Single(day.Tasks, t => t.Task == "B").Intervals.Single().Duration);
+    }
+
+    [Fact]
+    public void Stop_WhilePaused_EndsTaskWithoutAddingTime()
+    {
+        _tracker.Start("A");
+        Work(minutes: 10);
+        _tracker.Pause();
+        Work(minutes: 15);
+        _tracker.Stop();
+        Work(minutes: 5);
+
+        var status = _tracker.GetStatus();
+        Assert.Equal(TrackerState.Idle, status.State);
+        Assert.Null(status.CurrentTask);
+        var task = Assert.Single(_temp.Store.Load(Day).Tasks);
+        Assert.Equal(TimeSpan.FromMinutes(10), Assert.Single(task.Intervals).Duration);
+    }
+
+    [Fact]
     public void Status_ReportsCurrentTaskTotalIncludingOpenInterval()
     {
         _tracker.Start("A");

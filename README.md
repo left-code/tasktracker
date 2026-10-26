@@ -21,7 +21,8 @@ It is about 12 MB (the .NET runtime is bundled, trimmed to what the app uses and
 | Key | Action |
 |-----|--------|
 | `P` | Pause / resume the current task |
-| `S` | Switch task: pick a recent task (type to search) or choose **+ New task...**. `Esc` cancels and the current task keeps running |
+| `E` | End the current task and keep the window open. Nothing is timed until `S` or `N` starts the next task |
+| `S` | Switch task: pick a recent task (type to search) or choose **+ New task...**. `Esc` cancels and changes nothing |
 | `N` | Type a new task name straight away. `Esc` (or an empty name) cancels |
 | `R` | Report: today's summary while tracking carries on, with the running task counted up to now and updated every minute. `I` lists every interval, `Q` quits, any other key returns |
 | `Q` | Stop, save, and print today's summary |

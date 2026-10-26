@@ -16,7 +16,7 @@ public sealed class ConsoleUi(Tracker tracker, DayLogStore store)
     private const string CancelChoice = "<- Cancel";
     private static readonly TimeSpan KeyPollInterval = TimeSpan.FromMilliseconds(200);
     private static readonly ConsoleKey[] ActionKeys =
-        [ConsoleKey.P, ConsoleKey.S, ConsoleKey.N, ConsoleKey.R, ConsoleKey.Q];
+        [ConsoleKey.P, ConsoleKey.E, ConsoleKey.S, ConsoleKey.N, ConsoleKey.R, ConsoleKey.Q];
 
     /// <param name="continueTask">A task started with <c>TaskTracker start</c> to keep timing, instead of asking.</param>
     public void Run(string? continueTask = null)
@@ -43,7 +43,7 @@ public sealed class ConsoleUi(Tracker tracker, DayLogStore store)
         {
             // The tracker keeps its state and the heartbeat retries the save, so carry on.
             AnsiConsole.MarkupLine($"[red]Could not save the log:[/] {Markup.Escape(ex.Message)}");
-            AnsiConsole.MarkupLine("[grey]Tracking continues and saving is retried every minute. Press any key.[/]");
+            AnsiConsole.MarkupLine("[grey]Your change is kept and saving is retried every minute. Press any key.[/]");
             Console.ReadKey(intercept: true);
         }
     }
@@ -59,6 +59,10 @@ public sealed class ConsoleUi(Tracker tracker, DayLogStore store)
                     tracker.Pause();
                 else
                     tracker.Resume();
+                break;
+
+            case ConsoleKey.E:
+                tracker.Stop();
                 break;
 
             case ConsoleKey.S:
@@ -129,7 +133,7 @@ public sealed class ConsoleUi(Tracker tracker, DayLogStore store)
                 while (Console.KeyAvailable)
                 {
                     var key = Console.ReadKey(intercept: true).Key;
-                    if (ActionKeys.Contains(key))
+                    if (IsAction(key))
                     {
                         pressed = key;
                         return;
@@ -149,18 +153,29 @@ public sealed class ConsoleUi(Tracker tracker, DayLogStore store)
         return pressed;
     }
 
+    /// <summary>P and E have nothing to act on while idle; ignoring them avoids a redraw that does nothing.</summary>
+    private bool IsAction(ConsoleKey key) =>
+        ActionKeys.Contains(key) &&
+        !(tracker.State == TrackerState.Idle && key is ConsoleKey.P or ConsoleKey.E);
+
     private static (string Text, IRenderable View) BuildStatusView(TrackerStatus status)
     {
         var task = Markup.Escape(status.CurrentTask ?? "-");
-        var current = status.State == TrackerState.Running
-            ? $"[green]▶ {task}[/]   [bold]{FormatDuration(status.CurrentTaskTotal)}[/]"
-            : $"[yellow]⏸ Paused: {task}[/]   [bold]{FormatDuration(status.CurrentTaskTotal)}[/]";
-        var pauseLabel = status.State == TrackerState.Running ? "pause" : "resume";
+        var duration = FormatDuration(status.CurrentTaskTotal);
+        var current = status.State switch
+        {
+            TrackerState.Running => $"[green]▶ {task}[/]   [bold]{duration}[/]",
+            TrackerState.Paused => $"[yellow]⏸ Paused: {task}[/]   [bold]{duration}[/]",
+            _ => "[grey]■ No task running[/]",
+        };
+        var taskKeys = status.State == TrackerState.Idle
+            ? "[[S]] start a task"
+            : $"[[P]] {(status.State == TrackerState.Running ? "pause" : "resume")}   [[E]] end task   [[S]] switch task";
 
         var text =
             $"{current}\n" +
             $"Today: [bold]{FormatDuration(status.Day.Total)}[/] across [bold]{status.Day.TaskCount}[/] task(s)\n\n" +
-            $"[grey][[P]] {pauseLabel}   [[S]] switch task   [[N]] new task   [[R]] report   [[Q]] quit[/]";
+            $"[grey]{taskKeys}   [[N]] new task   [[R]] report   [[Q]] quit[/]";
 
         var panel = new Panel(new Markup(text))
             .Header($" TaskTracker — {status.Day.Date:ddd, dd MMM yyyy} ")
@@ -349,7 +364,8 @@ public sealed class ConsoleUi(Tracker tracker, DayLogStore store)
         AnsiConsole.MarkupLine("[bold]Keys while tracking[/]");
         var keys = new Grid().AddColumn(new GridColumn().PadLeft(2).PadRight(4)).AddColumn();
         keys.AddRow("P", "Pause / resume the current task");
-        keys.AddRow("S", "Switch task: pick a recent one (type to search) or a new one;\nEsc cancels and keeps the current task running");
+        keys.AddRow("E", "End the current task and keep the window open; S or N starts the next one");
+        keys.AddRow("S", "Switch task: pick a recent one (type to search) or a new one;\nEsc cancels and changes nothing");
         keys.AddRow("N", "Type a new task name (Esc or empty cancels)");
         keys.AddRow("R", "Report: today's summary, the running task counted up to now\n(then I all intervals, Q quit, any other key returns)");
         keys.AddRow("Q", "Stop, save, print today's summary and exit");
