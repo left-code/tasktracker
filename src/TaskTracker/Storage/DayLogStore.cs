@@ -118,20 +118,25 @@ public sealed class DayLogStore(string directory)
     {
         lock (_spellingsLock)
         {
-            if (before < _spellingsBefore)
-            {
-                // the clock was set back: start over
-                _spellings.Clear();
-                _unread.Clear();
-                _spellingsBefore = DateOnly.MinValue;
-            }
-
-            foreach (var date in LoggedDates().Where(d => d < before && (d >= _spellingsBefore || _unread.Contains(d))))
-                AddSpellings(date);
-            _spellingsBefore = before;
-
+            ReadSpellingsBefore(before);
             return _spellings.TryGetValue(DayLog.NormalizeName(name), out var known) ? known.Spelling : null;
         }
+    }
+
+    /// <summary>Call under <see cref="_spellingsLock"/>.</summary>
+    private void ReadSpellingsBefore(DateOnly before)
+    {
+        if (before < _spellingsBefore)
+        {
+            // the clock was set back: start over
+            _spellings.Clear();
+            _unread.Clear();
+            _spellingsBefore = DateOnly.MinValue;
+        }
+
+        foreach (var date in LoggedDates().Where(d => d < before && (d >= _spellingsBefore || _unread.Contains(d))))
+            AddSpellings(date);
+        _spellingsBefore = before;
     }
 
     private void AddSpellings(DateOnly date)
@@ -190,6 +195,27 @@ public sealed class DayLogStore(string directory)
                 if (seen.Add(task.Task))
                     names.Add(task.Task);
             }
+        }
+        return names;
+    }
+
+    /// <summary>
+    /// Every task ever logged up to <paramref name="today"/>: first the last <paramref name="recentDays"/> days as
+    /// <see cref="RecentTaskNames"/> orders them, then older tasks by the last day they were logged.
+    /// Uses the same kept names as <see cref="KnownSpelling"/>, so only the first call reads every file.
+    /// </summary>
+    public IReadOnlyList<string> AllTaskNames(DateOnly today, int recentDays)
+    {
+        var names = RecentTaskNames(today, recentDays).ToList();
+        var seen = new HashSet<string>(names.Select(DayLog.NormalizeName), StringComparer.OrdinalIgnoreCase);
+        lock (_spellingsLock)
+        {
+            ReadSpellingsBefore(today);
+            names.AddRange(_spellings
+                .Where(s => !seen.Contains(s.Key))
+                .OrderByDescending(s => s.Value.Date)
+                .ThenBy(s => s.Value.Spelling, StringComparer.OrdinalIgnoreCase)
+                .Select(s => s.Value.Spelling));
         }
         return names;
     }

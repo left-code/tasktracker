@@ -12,8 +12,6 @@ namespace TaskTracker.UI;
 public sealed class ConsoleUi(Tracker tracker, DayLogStore store)
 {
     private const int RecentDays = 7;
-    private const string NewTaskChoice = "+ New task...";
-    private const string CancelChoice = "<- Cancel";
     private static readonly TimeSpan KeyPollInterval = TimeSpan.FromMilliseconds(200);
     private static readonly ConsoleKey[] ActionKeys =
         [ConsoleKey.P, ConsoleKey.E, ConsoleKey.S, ConsoleKey.N, ConsoleKey.R, ConsoleKey.Q];
@@ -186,31 +184,18 @@ public sealed class ConsoleUi(Tracker tracker, DayLogStore store)
 
     private string? PickTask(bool allowCancel)
     {
-        var recent = store.RecentTaskNames(tracker.Today, RecentDays)
+        var tasks = store.AllTaskNames(tracker.Today, RecentDays)
             .Where(t => !string.Equals(t, tracker.CurrentTask, StringComparison.OrdinalIgnoreCase))
             .ToList();
-        if (recent.Count == 0)
+        if (tasks.Count == 0)
             return AskNewTask(allowCancel);
 
-        var prompt = new SelectionPrompt<string>()
-            .Title(allowCancel ? "Select a task [grey](type to search, Esc to cancel)[/]:" : "Select a task [grey](type to search)[/]:")
-            .PageSize(15)
-            .EnableSearch()
-            .UseConverter(Markup.Escape)
-            .AddChoices(NewTaskChoice)
-            .AddChoices(recent);
-        if (allowCancel)
+        var (action, task) = TaskPicker.Pick(tasks, allowCancel);
+        return action switch
         {
-            prompt.AddChoice(CancelChoice);
-            prompt.AddCancelResult(CancelChoice); // Esc does the same as choosing Cancel
-        }
-
-        var choice = AnsiConsole.Prompt(prompt);
-        return choice switch
-        {
-            NewTaskChoice => AskNewTask(allowCancel),
-            CancelChoice => null,
-            _ => choice,
+            PickAction.NewTask => AskNewTask(allowCancel),
+            PickAction.Cancel => null,
+            _ => task,
         };
     }
 
@@ -365,7 +350,7 @@ public sealed class ConsoleUi(Tracker tracker, DayLogStore store)
         var keys = new Grid().AddColumn(new GridColumn().PadLeft(2).PadRight(4)).AddColumn();
         keys.AddRow("P", "Pause / resume the current task");
         keys.AddRow("E", "End the current task and keep the window open; S or N starts the next one");
-        keys.AddRow("S", "Switch task: pick a recent one (type to search) or a new one;\nEsc cancels and changes nothing");
+        keys.AddRow("S", "Switch task: pick one of the 10 latest (type to search all tasks) or a new one;\nEsc cancels and changes nothing");
         keys.AddRow("N", "Type a new task name (Esc or empty cancels)");
         keys.AddRow("R", "Report: today's summary, the running task counted up to now\n(then I all intervals, Q quit, any other key returns)");
         keys.AddRow("Q", "Stop, save, print today's summary and exit");

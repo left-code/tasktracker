@@ -177,6 +177,34 @@ public sealed class DayLogStoreTests : IDisposable
     }
 
     [Fact]
+    public void AllTaskNames_RecentDaysFirst_ThenOlderByLastDay()
+    {
+        var oldest = new DayLog { Date = Day.AddDays(-40) };
+        oldest.GetOrAddTask("Ancient").Intervals.Add(Interval(9, 0, 10, 0, Day.AddDays(-40)));
+        oldest.GetOrAddTask("review").Intervals.Add(Interval(10, 0, 11, 0, Day.AddDays(-40)));
+        _temp.Store.Save(oldest);
+        var older = new DayLog { Date = Day.AddDays(-20) };
+        older.GetOrAddTask("Old").Intervals.Add(Interval(9, 0, 10, 0, Day.AddDays(-20)));
+        _temp.Store.Save(older);
+        var recent = new DayLog { Date = Day.AddDays(-1) };
+        recent.GetOrAddTask("Review").Intervals.Add(Interval(9, 0, 10, 0, Day.AddDays(-1)));
+        _temp.Store.Save(recent);
+        var today = new DayLog { Date = Day };
+        today.GetOrAddTask("Write docs").Intervals.Add(Interval(9, 0, 10, 0));
+        _temp.Store.Save(today);
+
+        var names = _temp.Store.AllTaskNames(Day, recentDays: 7);
+
+        Assert.Equal(["Write docs", "Review", "Old", "Ancient"], names);
+    }
+
+    [Fact]
+    public void AllTaskNames_NoLogDirectory_IsEmpty()
+    {
+        Assert.Empty(_temp.Store.AllTaskNames(Day, recentDays: 7));
+    }
+
+    [Fact]
     public void ReadJson_ReturnsTheLogAsLoaded()
     {
         System.IO.Directory.CreateDirectory(_temp.Directory);

@@ -22,7 +22,7 @@ It is about 12 MB (the .NET runtime is bundled, trimmed to what the app uses and
 |-----|--------|
 | `P` | Pause / resume the current task |
 | `E` | End the current task and keep the window open. Nothing is timed until `S` or `N` starts the next task |
-| `S` | Switch task: pick a recent task (type to search) or choose **+ New task...**. `Esc` cancels and changes nothing |
+| `S` | Switch task: pick one of the 10 latest tasks (type to search all tasks) or choose **+ New task...**. `Esc` cancels and changes nothing |
 | `N` | Type a new task name straight away. `Esc` (or an empty name) cancels |
 | `R` | Report: today's summary while tracking carries on, with the running task counted up to now and updated every minute. `I` lists every interval, `Q` quits, any other key returns |
 | `Q` | Stop, save, and print today's summary |
@@ -67,7 +67,8 @@ Run `TaskTracker --help` (or `-h`, `-?`, `/?`) for a summary of commands and key
 Task names are any text. Matching ignores case and surrounding spaces, so `Bug fix` and `bug fix ` count as the same task.
 A task keeps the spelling it was last logged with, however you type it later: once `TASK-1123` is in a log,
 starting `task-1123` records it as `TASK-1123`. A new task keeps the spelling you first type.
-The task picker lists tasks from the last 7 days, with the most recently used first.
+The task picker shows at most 10 tasks, the most recently used first. Typing searches every task ever logged and
+shows the first 10 matches; type more to narrow them down.
 
 ## Logs
 

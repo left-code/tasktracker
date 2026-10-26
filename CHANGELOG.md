@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-10-26
+
+### Changed
+
+- The task picker (at start and on `S`) shows at most 10 tasks, the most recently used first, and never scrolls. Typing searches every task ever logged, not only the last 7 days, and shows the first 10 matches. A note says how many more there are. In a window too short for 10, it shows as many as fit. Without a cancel option (at start), `Esc` clears the search.
+
 ## [1.3.0] - 2026-10-26
 
 ### Added
@@ -81,7 +87,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Optional self-signed code signing with the **publish + sign** task, plus scripts to create, use and trust the certificate. Signatures are timestamped, so signing needs internet access. Signing is not required to distribute the exe.
 - VS Code build, test and publish tasks, an F5 debug configuration and an xUnit test suite.
 
-[unreleased]: https://github.com/vlkozl/tasktracker/compare/v1.3.0...HEAD
+[unreleased]: https://github.com/vlkozl/tasktracker/compare/v1.4.0...HEAD
+[1.4.0]: https://github.com/vlkozl/tasktracker/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/vlkozl/tasktracker/compare/v1.2.1...v1.3.0
 [1.2.1]: https://github.com/vlkozl/tasktracker/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/vlkozl/tasktracker/compare/v1.1.0...v1.2.0
