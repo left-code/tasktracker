@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- A PowerShell installer for the current user that downloads a public GitHub release directly and adds TaskTracker to the user's PATH. It supports one-command installation and updates without GitHub CLI or authentication.
+
 ## [1.4.0] - 2026-10-26
 
 ### Changed

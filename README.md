@@ -16,6 +16,31 @@ To build a standalone `TaskTracker.exe`, run the **publish (single exe)** task. 
 It is about 12 MB (the .NET runtime is bundled, trimmed to what the app uses and compressed), so it doesn't need
 .NET installed on the target PC. It doesn't need to be signed (see [Code signing](#code-signing-optional)).
 
+## Install for the current user
+
+Install or update from PowerShell:
+
+```powershell
+irm https://raw.githubusercontent.com/vlkozl/tasktracker/main/scripts/Install-TaskTracker.ps1 | iex
+```
+
+Or run the script from a local copy of this repository:
+
+```powershell
+.\scripts\Install-TaskTracker.ps1
+# Or install a specific release:
+.\scripts\Install-TaskTracker.ps1 -Version v1.4.0
+```
+
+The script downloads the public `TaskTracker.exe` release asset directly. GitHub CLI and GitHub
+authentication are not needed.
+
+It downloads the latest stable release by default, installs to `%LOCALAPPDATA%\Programs\TaskTracker`,
+and adds that folder to your user `PATH`. Open a new terminal afterward to run `TaskTracker`.
+No administrator rights or .NET installation are needed. Rerun the script to update; close TaskTracker
+first if it is running. Your logs and `current.json` stay in `%USERPROFILE%\.TaskTracker`.
+The script supports Windows PowerShell 5.1 and PowerShell 7.
+
 ## Keys
 
 | Key | Action |
