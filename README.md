@@ -4,6 +4,9 @@ A 100% vibe coded Windows console app that tracks how much time you spend on tas
 Type a task name, and a timer starts. You can switch between tasks, pause, and see
 today's totals at any time.
 
+It is meant to stay that simple. New features are optional extras on top (a flag, a key, a command), and
+what already works keeps working the same way: the same keys, commands, reports and log files.
+
 ## Run
 
 ```powershell
