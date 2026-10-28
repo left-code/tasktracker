@@ -36,6 +36,7 @@ You don't have to keep the window open. These commands do one thing and exit:
 | `TaskTracker start <task>` | Start a task. If another one is running, it ends first (a switch) |
 | `TaskTracker end [<task>]` | End the running task and print its time. With a name, it checks that this task is the one running |
 | `TaskTracker report [yyyy-MM-dd]` | Print a day's summary; today without a date |
+| `TaskTracker report [yyyy-MM-dd] --intervals` | Print the summary and then every interval of the day (also `-i`) |
 | `TaskTracker report [yyyy-MM-dd] --json` | Print the day's log as JSON, for scripts |
 | `TaskTracker --help` | Commands and keys (also `-h`, `-?`, `/?`) |
 
@@ -54,6 +55,10 @@ Reports only read the logs, so they never stop a task and work at any time:
 - a task started with `start` is shown as running and isn't in the table yet: its time is added when it ends;
 - if the TaskTracker window is open, the report says so. Its current task is included up to the last save, at
   most a minute ago. Press `R` in the window for a live report.
+
+Add `--intervals` (or `-i`, before or after the date) to list the day's logged intervals after the summary: start, end,
+duration and task, in time order. Like the summary, it shows the log as saved, so a task started with `start` isn't
+listed until it ends. With `--json` it changes nothing: the JSON already holds every interval.
 
 Add `--json` (before or after the date) to get the day's log as JSON, with nothing else on stdout, so it can be
 piped: `TaskTracker report --json | ConvertFrom-Json` or `TaskTracker report 2026-10-23 --json | jq .`.

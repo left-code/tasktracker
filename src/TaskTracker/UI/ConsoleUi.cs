@@ -336,6 +336,7 @@ public sealed class ConsoleUi(Tracker tracker, DayLogStore store)
         commands.AddRow("TaskTracker end [[<task>]]", "End the task started with [bold]start[/]");
         commands.AddRow("TaskTracker report", "Print today's summary and exit");
         commands.AddRow("TaskTracker report [[yyyy-MM-dd]]", "Print another day's summary");
+        commands.AddRow("TaskTracker report ... --intervals", "Also list every interval (also [bold]-i[/])");
         commands.AddRow("TaskTracker report ... --json", "Print the day's log as JSON, for scripts");
         commands.AddRow("TaskTracker --help", "Show this help (also [bold]-h[/], [bold]-?[/], [bold]/?[/])");
         AnsiConsole.Write(commands);
@@ -395,7 +396,8 @@ public sealed class ConsoleUi(Tracker tracker, DayLogStore store)
         AnsiConsole.Write(table);
     }
 
-    private static void WriteIntervals(DaySummary day)
+    /// <summary>Every interval of the day in time order. Also used by <c>TaskTracker report --intervals</c>.</summary>
+    public static void WriteIntervals(DaySummary day)
     {
         var table = new Table()
             .Border(TableBorder.Rounded)

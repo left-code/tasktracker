@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-10-28
+
+### Added
+
+- `TaskTracker report [yyyy-MM-dd] --intervals` (or `-i`) lists every interval of the day after the summary: start, end, duration and task, in time order. With `--json` it changes nothing, since the JSON already holds every interval.
+
 ## [1.4.0] - 2026-10-26
 
 ### Changed
@@ -87,7 +93,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Optional self-signed code signing with the **publish + sign** task, plus scripts to create, use and trust the certificate. Signatures are timestamped, so signing needs internet access. Signing is not required to distribute the exe.
 - VS Code build, test and publish tasks, an F5 debug configuration and an xUnit test suite.
 
-[unreleased]: https://github.com/vlkozl/tasktracker/compare/v1.4.0...HEAD
+[unreleased]: https://github.com/vlkozl/tasktracker/compare/v1.5.0...HEAD
+[1.5.0]: https://github.com/vlkozl/tasktracker/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/vlkozl/tasktracker/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/vlkozl/tasktracker/compare/v1.2.1...v1.3.0
 [1.2.1]: https://github.com/vlkozl/tasktracker/compare/v1.2.0...v1.2.1
