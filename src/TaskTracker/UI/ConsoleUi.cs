@@ -16,10 +16,15 @@ public sealed class ConsoleUi(Tracker tracker, DayLogStore store)
     private static readonly ConsoleKey[] ActionKeys =
         [ConsoleKey.P, ConsoleKey.E, ConsoleKey.S, ConsoleKey.N, ConsoleKey.R, ConsoleKey.Q];
 
+    /// <summary>The release number, such as 1.5.0, without the commit hash the SDK appends after a +.</summary>
+    private static readonly string Version = typeof(ConsoleUi).Assembly
+        .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion.Split('+')[0] ?? "";
+
     /// <param name="continueTask">A task started with <c>TaskTracker start</c> to keep timing, instead of asking.</param>
     public void Run(string? continueTask = null)
     {
         AnsiConsole.Clear();
+        AnsiConsole.MarkupLine($"[bold]TaskTracker[/] {Markup.Escape(Version)}");
         var status = tracker.GetStatus();
         if (status.Day.TaskCount > 0)
             WriteSummary(status.Day);
@@ -176,7 +181,7 @@ public sealed class ConsoleUi(Tracker tracker, DayLogStore store)
             $"[grey]{taskKeys}   [[N]] new task   [[R]] report   [[Q]] quit[/]";
 
         var panel = new Panel(new Markup(text))
-            .Header($" TaskTracker — {status.Day.Date:ddd, dd MMM yyyy} ")
+            .Header($" TaskTracker {Markup.Escape(Version)} — {status.Day.Date:ddd, dd MMM yyyy} ")
             .Border(BoxBorder.Rounded)
             .Padding(2, 1);
         return (text, panel);
@@ -321,10 +326,7 @@ public sealed class ConsoleUi(Tracker tracker, DayLogStore store)
     /// <summary>Output of <c>TaskTracker --help</c>.</summary>
     public static void WriteHelp(string logDirectory)
     {
-        var version = typeof(ConsoleUi).Assembly
-            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion.Split('+')[0];
-
-        AnsiConsole.MarkupLine($"[bold]TaskTracker[/] {Markup.Escape(version ?? "")}");
+        AnsiConsole.MarkupLine($"[bold]TaskTracker[/] {Markup.Escape(Version)}");
         AnsiConsole.MarkupLine("Tracks how much time you spend on tasks. Pick or type a task and a timer starts;");
         AnsiConsole.MarkupLine("switch, pause and report while you work. Each day is saved as one JSON log.");
         AnsiConsole.WriteLine();
