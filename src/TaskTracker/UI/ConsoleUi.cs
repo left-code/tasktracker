@@ -20,6 +20,17 @@ public sealed class ConsoleUi(Tracker tracker, DayLogStore store)
     private static readonly string Version = typeof(ConsoleUi).Assembly
         .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion.Split('+')[0] ?? "";
 
+    /// <summary>Taken by every redraw and by <see cref="Quit"/>, which Ctrl+C runs on another thread.</summary>
+    private readonly Lock _screen = new();
+    private bool _quitting;
+
+    /// <summary>
+    /// Where <see cref="Quit"/> writes. While a Live display runs, every write to the shared console
+    /// redraws it afterwards, so Ctrl+C would leave the status panel under the report. A console of
+    /// its own isn't hooked by Live.
+    /// </summary>
+    private readonly IAnsiConsole _quitConsole = AnsiConsole.Create(new AnsiConsoleSettings());
+
     /// <param name="continueTask">A task started with <c>TaskTracker start</c> to keep timing, instead of asking.</param>
     public void Run(string? continueTask = null)
     {
@@ -27,7 +38,7 @@ public sealed class ConsoleUi(Tracker tracker, DayLogStore store)
         AnsiConsole.MarkupLine($"[bold]TaskTracker[/] {Markup.Escape(Version)}");
         var status = tracker.GetStatus();
         if (status.Day.TaskCount > 0)
-            WriteSummary(status.Day);
+            WriteSummary(status.Day, AnsiConsole.Console);
 
         var task = continueTask ?? PickTask(allowCancel: false)!;
         var running = true;
@@ -54,7 +65,7 @@ public sealed class ConsoleUi(Tracker tracker, DayLogStore store)
     /// <summary>Waits for one key action and performs it. Returns false when the user quits.</summary>
     private bool HandleNextAction()
     {
-        AnsiConsole.Clear();
+        Draw(AnsiConsole.Clear);
         switch (WaitForAction())
         {
             case ConsoleKey.P:
@@ -86,32 +97,70 @@ public sealed class ConsoleUi(Tracker tracker, DayLogStore store)
         return true;
     }
 
-    /// <summary>Stops and saves, retrying once on failure; exits either way, since the heartbeat stops with the app.</summary>
-    private void Quit()
+    /// <summary>
+    /// Stops and saves, retrying once on failure, then prints today's report. Used by Q and by Ctrl+C.
+    /// The app exits afterwards whatever happens, since the heartbeat stops with it, so this never throws
+    /// for a save or a broken log. Runs once: a second call (Ctrl+C after Q) waits for the first to
+    /// finish, so the process can't end in the middle of a save.
+    /// </summary>
+    public void Quit()
     {
-        AnsiConsole.Clear();
-        for (var attempt = 1; ; attempt++)
+        lock (_screen)
         {
+            if (_quitting)
+                return;
+            _quitting = true;
+
+            var console = _quitConsole;
+            console.Clear();
+            for (var attempt = 1; ; attempt++)
+            {
+                try
+                {
+                    tracker.Stop();
+                    break;
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException && attempt < 2)
+                {
+                    console.MarkupLine($"[yellow]Saving failed ({Markup.Escape(ex.Message)}), retrying...[/]");
+                    Thread.Sleep(TimeSpan.FromSeconds(1));
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException)
+                {
+                    console.MarkupLine($"[red]Could not save the last interval:[/] {Markup.Escape(ex.Message)}");
+                    console.MarkupLine("[grey]At most the last minute is missing from the log.[/]");
+                    break;
+                }
+            }
+
             try
             {
-                tracker.Stop();
-                break;
+                WriteReport(tracker.GetStatus().Day, console);
+                console.MarkupLine($"[grey]Log: {Markup.Escape(store.PathFor(tracker.Today))}[/]");
             }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException && attempt < 2)
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException)
             {
-                AnsiConsole.MarkupLine($"[yellow]Saving failed ({Markup.Escape(ex.Message)}), retrying...[/]");
-                Thread.Sleep(TimeSpan.FromSeconds(1));
+                console.MarkupLine($"[red]Could not show today's summary:[/] {Markup.Escape(ex.Message)}");
             }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            console.Cursor.Show(); // Live hides it, and Ctrl+C ends the process inside Live
+        }
+    }
+
+    /// <summary>
+    /// Redraws, unless <see cref="Quit"/> has run: then the final report is on screen, so this thread
+    /// just waits for the process to end (Ctrl+C ends it once its handler returns).
+    /// </summary>
+    private void Draw(Action draw)
+    {
+        lock (_screen)
+        {
+            if (!_quitting)
             {
-                AnsiConsole.MarkupLine($"[red]Could not save the last interval:[/] {Markup.Escape(ex.Message)}");
-                AnsiConsole.MarkupLine("[grey]At most the last minute is missing from the log.[/]");
-                break;
+                draw();
+                return;
             }
         }
-
-        WriteReport(tracker.GetStatus().Day);
-        AnsiConsole.MarkupLine($"[grey]Log: {Markup.Escape(store.PathFor(tracker.Today))}[/]");
+        Thread.Sleep(Timeout.Infinite);
     }
 
     private void StartIfChosen(string? task)
@@ -130,7 +179,7 @@ public sealed class ConsoleUi(Tracker tracker, DayLogStore store)
         {
             // Live draws nothing until the first refresh; without this the screen stays blank
             // until the status text first changes (up to a minute).
-            ctx.Refresh();
+            Draw(ctx.Refresh);
             while (true)
             {
                 while (Console.KeyAvailable)
@@ -138,7 +187,8 @@ public sealed class ConsoleUi(Tracker tracker, DayLogStore store)
                     var key = Console.ReadKey(intercept: true).Key;
                     if (IsAction(key))
                     {
-                        pressed = key;
+                        // Leaving Live redraws the panel once more, which mustn't land on Ctrl+C's report.
+                        Draw(() => pressed = key);
                         return;
                     }
                 }
@@ -147,8 +197,11 @@ public sealed class ConsoleUi(Tracker tracker, DayLogStore store)
                 if (newText != text)
                 {
                     text = newText;
-                    ctx.UpdateTarget(newView);
-                    ctx.Refresh();
+                    Draw(() =>
+                    {
+                        ctx.UpdateTarget(newView);
+                        ctx.Refresh();
+                    });
                 }
                 Thread.Sleep(KeyPollInterval);
             }
@@ -173,12 +226,12 @@ public sealed class ConsoleUi(Tracker tracker, DayLogStore store)
         };
         var taskKeys = status.State == TrackerState.Idle
             ? "[[S]] start a task"
-            : $"[[P]] {(status.State == TrackerState.Running ? "pause" : "resume")}   [[E]] end task   [[S]] switch task";
+            : $"[[S]] switch task   [[P]] {(status.State == TrackerState.Running ? "pause" : "resume")}   [[E]] end task";
 
         var text =
             $"{current}\n" +
             $"Today: [bold]{FormatDuration(status.Day.Total)}[/] across [bold]{status.Day.TaskCount}[/] task(s)\n\n" +
-            $"[grey]{taskKeys}   [[N]] new task   [[R]] report   [[Q]] quit[/]";
+            $"[grey][[N]] new task   {taskKeys}   [[R]] report   [[Q]] quit[/]";
 
         var panel = new Panel(new Markup(text))
             .Header($" TaskTracker {Markup.Escape(Version)} — {status.Day.Date:ddd, dd MMM yyyy} ")
@@ -285,10 +338,13 @@ public sealed class ConsoleUi(Tracker tracker, DayLogStore store)
                 if (text != shown)
                 {
                     shown = text;
-                    AnsiConsole.Clear();
-                    WriteReport(status.Day);
-                    AnsiConsole.MarkupLine(line);
-                    AnsiConsole.MarkupLine("[grey][[I]] all intervals   [[Q]] quit   any other key to return[/]");
+                    Draw(() =>
+                    {
+                        AnsiConsole.Clear();
+                        WriteReport(status.Day);
+                        AnsiConsole.MarkupLine(line);
+                        AnsiConsole.MarkupLine("[grey][[I]] all intervals   [[Q]] quit   any other key to return[/]");
+                    });
                 }
                 Thread.Sleep(KeyPollInterval);
             }
@@ -351,12 +407,12 @@ public sealed class ConsoleUi(Tracker tracker, DayLogStore store)
 
         AnsiConsole.MarkupLine("[bold]Keys while tracking[/]");
         var keys = new Grid().AddColumn(new GridColumn().PadLeft(2).PadRight(4)).AddColumn();
+        keys.AddRow("N", "Type a new task name (Esc or empty cancels)");
+        keys.AddRow("S", "Switch task: pick one of the 10 latest (type to search all tasks) or a new one;\nEsc cancels and changes nothing");
         keys.AddRow("P", "Pause / resume the current task");
         keys.AddRow("E", "End the current task and keep the window open; S or N starts the next one");
-        keys.AddRow("S", "Switch task: pick one of the 10 latest (type to search all tasks) or a new one;\nEsc cancels and changes nothing");
-        keys.AddRow("N", "Type a new task name (Esc or empty cancels)");
         keys.AddRow("R", "Report: today's summary, the running task counted up to now\n(then I all intervals, Q quit, any other key returns)");
-        keys.AddRow("Q", "Stop, save, print today's summary and exit");
+        keys.AddRow("Q", "Stop, save, print today's summary and exit (Ctrl+C does the same)");
         AnsiConsole.Write(keys);
         AnsiConsole.WriteLine();
 
@@ -367,15 +423,16 @@ public sealed class ConsoleUi(Tracker tracker, DayLogStore store)
     }
 
     /// <summary>The day's summary, or a short note for an empty day. Also used by <c>TaskTracker report</c>.</summary>
-    public static void WriteReport(DaySummary day)
+    public static void WriteReport(DaySummary day, IAnsiConsole? console = null)
     {
+        console ??= AnsiConsole.Console;
         if (day.TaskCount == 0)
-            AnsiConsole.MarkupLine($"[grey]Nothing tracked on {day.Date:ddd dd MMM yyyy}.[/]");
+            console.MarkupLine($"[grey]Nothing tracked on {day.Date:ddd dd MMM yyyy}.[/]");
         else
-            WriteSummary(day);
+            WriteSummary(day, console);
     }
 
-    private static void WriteSummary(DaySummary day)
+    private static void WriteSummary(DaySummary day, IAnsiConsole console)
     {
         var table = new Table()
             .Border(TableBorder.Rounded)
@@ -395,7 +452,7 @@ public sealed class ConsoleUi(Tracker tracker, DayLogStore store)
                 $"{task.LastEnd:HH:mm}",
                 FormatDuration(task.Total));
         }
-        AnsiConsole.Write(table);
+        console.Write(table);
     }
 
     /// <summary>Every interval of the day in time order. Also used by <c>TaskTracker report --intervals</c>.</summary>

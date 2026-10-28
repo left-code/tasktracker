@@ -13,6 +13,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - The version number is shown when TaskTracker starts, above the task picker, and in the header of the status screen, for example **TaskTracker 1.6.0 — Wed, 28 Oct 2026**.
 
+### Changed
+
+- Ctrl+C prints today's summary before exiting, like `Q`. Before, it only saved and exited.
+- The keys on the status screen are listed in a new order: **[N] new task   [S] switch task   [P] pause   [E] end task   [R] report   [Q] quit**. `--help` and the README list them in the same order.
+
 ## [1.5.0] - 2026-10-28
 
 ### Added

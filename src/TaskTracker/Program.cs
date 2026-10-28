@@ -58,13 +58,12 @@ using var heartbeat = time.CreateTimer(_ =>
     }
 }, null, heartbeatInterval, heartbeatInterval);
 
-// Ctrl+C and closing the console window: save the open interval before the process ends.
-Console.CancelKeyPress += (_, _) =>
-{
-    tracker.Stop();
-    AnsiConsole.Cursor.Show();
-};
+var ui = new ConsoleUi(tracker, store);
+
+// Ctrl+C quits like Q: save the open interval and print today's report before the process ends.
+// Closing the console window only saves, since there is no window left to print to.
+Console.CancelKeyPress += (_, _) => ui.Quit();
 using var onWindowClose = PosixSignalRegistration.Create(PosixSignal.SIGHUP, _ => tracker.Stop());
 
-new ConsoleUi(tracker, store).Run(continueTask);
+ui.Run(continueTask);
 return 0;

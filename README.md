@@ -20,12 +20,12 @@ It is about 12 MB (the .NET runtime is bundled, trimmed to what the app uses and
 
 | Key | Action |
 |-----|--------|
+| `N` | Type a new task name straight away. `Esc` (or an empty name) cancels |
+| `S` | Switch task: pick one of the 10 latest tasks (type to search all tasks) or choose **+ New task...**. `Esc` cancels and changes nothing |
 | `P` | Pause / resume the current task |
 | `E` | End the current task and keep the window open. Nothing is timed until `S` or `N` starts the next task |
-| `S` | Switch task: pick one of the 10 latest tasks (type to search all tasks) or choose **+ New task...**. `Esc` cancels and changes nothing |
-| `N` | Type a new task name straight away. `Esc` (or an empty name) cancels |
 | `R` | Report: today's summary while tracking carries on, with the running task counted up to now and updated every minute. `I` lists every interval, `Q` quits, any other key returns |
-| `Q` | Stop, save, and print today's summary |
+| `Q` | Stop, save, and print today's summary. `Ctrl+C` does the same |
 
 ## Commands
 
@@ -95,7 +95,7 @@ Logs go to one file per day: `%USERPROFILE%\.TaskTracker\logs\yyyy-MM-dd.json`
 ```
 
 - **Saving:** the running interval is saved as soon as it starts and again every minute. Ctrl+C
-  and closing the window also save it. If the app is killed, you lose at most about one minute.
+  (which also prints today's summary) and closing the window also save it. If the app is killed, you lose at most about one minute.
 - **Sleep:** if the PC sleeps for more than 5 minutes while a task is running, the sleep time is not counted.
 - **Midnight:** an interval that runs past 00:00 is split between the two days' files.
 - **One instance:** a second copy of the app refuses to start, so two copies can't overwrite each other's log.
