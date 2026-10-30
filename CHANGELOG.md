@@ -11,6 +11,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - A PowerShell installer for the current user that downloads a public GitHub release directly and adds TaskTracker to the user's PATH. It supports one-command installation and updates without GitHub CLI or authentication.
 
+## [1.6.0] - 2026-10-28
+
+### Added
+
+- The version number is shown when TaskTracker starts, above the task picker, and in the header of the status screen, for example **TaskTracker 1.6.0 — Wed, 28 Oct 2026**.
+
+### Changed
+
+- Ctrl+C prints today's summary before exiting, like `Q`. Before, it only saved and exited.
+- The keys on the status screen are listed in a new order: **[N] new task   [S] switch task   [P] pause   [E] end task   [R] report   [Q] quit**. `--help` and the README list them in the same order.
+
+## [1.5.0] - 2026-10-28
+
+### Added
+
+- `TaskTracker report [yyyy-MM-dd] --intervals` (or `-i`) lists every interval of the day after the summary: start, end, duration and task, in time order. With `--json` it changes nothing, since the JSON already holds every interval.
+
 ## [1.4.0] - 2026-10-26
 
 ### Changed
@@ -91,7 +108,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Optional self-signed code signing with the **publish + sign** task, plus scripts to create, use and trust the certificate. Signatures are timestamped, so signing needs internet access. Signing is not required to distribute the exe.
 - VS Code build, test and publish tasks, an F5 debug configuration and an xUnit test suite.
 
-[unreleased]: https://github.com/vlkozl/tasktracker/compare/v1.4.0...HEAD
+[unreleased]: https://github.com/vlkozl/tasktracker/compare/v1.6.0...HEAD
+[1.6.0]: https://github.com/vlkozl/tasktracker/compare/v1.5.0...v1.6.0
+[1.5.0]: https://github.com/vlkozl/tasktracker/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/vlkozl/tasktracker/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/vlkozl/tasktracker/compare/v1.2.1...v1.3.0
 [1.2.1]: https://github.com/vlkozl/tasktracker/compare/v1.2.0...v1.2.1

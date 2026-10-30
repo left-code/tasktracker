@@ -7,11 +7,13 @@ using TaskTracker.Tracking;
 
 namespace TaskTracker.UI;
 
+public sealed record ReportArgs(DateOnly? Day, bool Json, bool Intervals);
+
 /// <summary>The one-shot commands: <c>start</c>, <c>end</c>, <c>report</c> and <c>--help</c>. Each prints and exits.</summary>
 public static class CommandLine
 {
     private const string Usage =
-        "Usage: [bold]TaskTracker[/] [[start <task> | end [[<task>]] | report [[yyyy-MM-dd]] [[--json]]]]   (see [bold]TaskTracker --help[/])";
+        "Usage: [bold]TaskTracker[/] [[start <task> | end [[<task>]] | report [[yyyy-MM-dd]] [[--intervals]] [[--json]]]]   (see [bold]TaskTracker --help[/])";
 
     private const string AppIsOpen =
         "[red]TaskTracker is open.[/] Switch or stop tasks in that window, or quit it first.";
@@ -42,7 +44,7 @@ public static class CommandLine
             case "report" when ParseReportArgs(args.Skip(1)) is { } report:
                 return report.Json
                     ? WriteJson(logs, report.Day ?? today)
-                    : Guarded(() => Report(logs, commands, report.Day ?? today, now));
+                    : Guarded(() => Report(logs, commands, report.Day ?? today, report.Intervals, now));
 
             default:
                 AnsiConsole.MarkupLine(Usage);
@@ -86,11 +88,14 @@ public static class CommandLine
         return 0;
     }
 
-    private static int Report(DayLogStore logs, CommandTracker commands, DateOnly day, DateTimeOffset now)
+    private static int Report(DayLogStore logs, CommandTracker commands, DateOnly day, bool intervals, DateTimeOffset now)
     {
         var today = LocalClock.DateOf(now);
         var log = logs.Load(day);
-        ConsoleUi.WriteReport(DaySummary.From(log));
+        var summary = DaySummary.From(log);
+        ConsoleUi.WriteReport(summary);
+        if (intervals && summary.Intervals.Count > 0)
+            ConsoleUi.WriteIntervals(summary);
 
         // The running task's time is written only when it ends, so it is not in the table yet. If the
         // table already has time for it since its start, an end is being written right now: say nothing,
@@ -118,21 +123,27 @@ public static class CommandLine
         return 0;
     }
 
-    /// <summary>An optional date and an optional <c>--json</c>, in either order; null if anything else is given.</summary>
-    private static (DateOnly? Day, bool Json)? ParseReportArgs(IEnumerable<string> args)
+    /// <summary>
+    /// An optional date, <c>--intervals</c> (<c>-i</c>) and <c>--json</c>, in any order; null if anything else is
+    /// given. With <c>--json</c>, <c>--intervals</c> changes nothing: the JSON already holds every interval.
+    /// </summary>
+    public static ReportArgs? ParseReportArgs(IEnumerable<string> args)
     {
         DateOnly? day = null;
-        var json = false;
+        bool json = false, intervals = false;
         foreach (var arg in args)
         {
             if (!json && string.Equals(arg, "--json", StringComparison.OrdinalIgnoreCase))
                 json = true;
+            else if (!intervals && (string.Equals(arg, "--intervals", StringComparison.OrdinalIgnoreCase) ||
+                                    string.Equals(arg, "-i", StringComparison.OrdinalIgnoreCase)))
+                intervals = true;
             else if (day is null && DateOnly.TryParseExact(arg, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var date))
                 day = date;
             else
                 return null;
         }
-        return (day, json);
+        return new ReportArgs(day, json, intervals);
     }
 
     /// <summary>

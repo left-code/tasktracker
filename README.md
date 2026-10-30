@@ -4,6 +4,9 @@ A 100% vibe coded Windows console app that tracks how much time you spend on tas
 Type a task name, and a timer starts. You can switch between tasks, pause, and see
 today's totals at any time.
 
+It is meant to stay that simple. New features are optional extras on top (a flag, a key, a command), and
+what already works keeps working the same way: the same keys, commands, reports and log files.
+
 ## Run
 
 ```powershell
@@ -45,12 +48,12 @@ The script supports Windows PowerShell 5.1 and PowerShell 7.
 
 | Key | Action |
 |-----|--------|
+| `N` | Type a new task name straight away. `Esc` (or an empty name) cancels |
+| `S` | Switch task: pick one of the 10 latest tasks (type to search all tasks) or choose **+ New task...**. `Esc` cancels and changes nothing |
 | `P` | Pause / resume the current task |
 | `E` | End the current task and keep the window open. Nothing is timed until `S` or `N` starts the next task |
-| `S` | Switch task: pick one of the 10 latest tasks (type to search all tasks) or choose **+ New task...**. `Esc` cancels and changes nothing |
-| `N` | Type a new task name straight away. `Esc` (or an empty name) cancels |
 | `R` | Report: today's summary while tracking carries on, with the running task counted up to now and updated every minute. `I` lists every interval, `Q` quits, any other key returns |
-| `Q` | Stop, save, and print today's summary |
+| `Q` | Stop, save, and print today's summary. `Ctrl+C` does the same |
 
 ## Commands
 
@@ -61,6 +64,7 @@ You don't have to keep the window open. These commands do one thing and exit:
 | `TaskTracker start <task>` | Start a task. If another one is running, it ends first (a switch) |
 | `TaskTracker end [<task>]` | End the running task and print its time. With a name, it checks that this task is the one running |
 | `TaskTracker report [yyyy-MM-dd]` | Print a day's summary; today without a date |
+| `TaskTracker report [yyyy-MM-dd] --intervals` | Print the summary and then every interval of the day (also `-i`) |
 | `TaskTracker report [yyyy-MM-dd] --json` | Print the day's log as JSON, for scripts |
 | `TaskTracker --help` | Commands and keys (also `-h`, `-?`, `/?`) |
 
@@ -79,6 +83,10 @@ Reports only read the logs, so they never stop a task and work at any time:
 - a task started with `start` is shown as running and isn't in the table yet: its time is added when it ends;
 - if the TaskTracker window is open, the report says so. Its current task is included up to the last save, at
   most a minute ago. Press `R` in the window for a live report.
+
+Add `--intervals` (or `-i`, before or after the date) to list the day's logged intervals after the summary: start, end,
+duration and task, in time order. Like the summary, it shows the log as saved, so a task started with `start` isn't
+listed until it ends. With `--json` it changes nothing: the JSON already holds every interval.
 
 Add `--json` (before or after the date) to get the day's log as JSON, with nothing else on stdout, so it can be
 piped: `TaskTracker report --json | ConvertFrom-Json` or `TaskTracker report 2026-10-23 --json | jq .`.
@@ -115,7 +123,7 @@ Logs go to one file per day: `%USERPROFILE%\.TaskTracker\logs\yyyy-MM-dd.json`
 ```
 
 - **Saving:** the running interval is saved as soon as it starts and again every minute. Ctrl+C
-  and closing the window also save it. If the app is killed, you lose at most about one minute.
+  (which also prints today's summary) and closing the window also save it. If the app is killed, you lose at most about one minute.
 - **Sleep:** if the PC sleeps for more than 5 minutes while a task is running, the sleep time is not counted.
 - **Midnight:** an interval that runs past 00:00 is split between the two days' files.
 - **One instance:** a second copy of the app refuses to start, so two copies can't overwrite each other's log.

@@ -3,6 +3,27 @@
 Instructions for AI coding agents working on this repository. For what the app does, its keys,
 log format and code signing, read [README.md](README.md). This file covers how to change the code safely.
 
+## Design principle: stay simple, extend on top
+
+The main promise of the app is that it is simple to use, and it must stay that way. New features are added
+on top of what users already know (*progressive disclosure*), and they never change how the existing,
+simple behaviour works (*backward compatibility*). This covers everything a user sees or keeps: keys, commands,
+flags, screens, reports, output, and the files the app creates.
+
+- **The basic use doesn't change.** `TaskTracker`, `start <task>`, `end` and `report` with no extra arguments,
+  and the existing keys, behave as they do now. Don't add a required argument, step, prompt or setting to them.
+- **New behaviour is opt-in.** Add it as an optional flag (like `report --intervals`), a new key or a new
+  command, so that a user who doesn't use it never notices it. Combinations that make no sense are harmless
+  (`--intervals` with `--json` is ignored), not errors.
+- **Additive only.** Don't remove or rename keys, commands or flags, and don't give an existing one a new
+  meaning. Existing output keeps its shape. `report --json` keeps nothing but JSON on stdout.
+- **Files.** No new files or folders unless a feature can't work without them, and no config file that must
+  exist. The log format stays backward compatible (see [Storage](#storage)).
+- **Small surface.** Prefer extending an existing command or screen over adding a new one, and good defaults
+  over options. Show a key only when it can do something (idle hides `P` and `E`).
+- **Everything visible is documented** in `--help`, [README.md](README.md) and `CHANGELOG.md`.
+- If a change can't follow these rules, it is a breaking change: say so and ask the user before making it.
+
 ## Project overview
 
 - Windows-only console time tracker: C# / .NET 10 (`net10.0`), UI built with Spectre.Console.
