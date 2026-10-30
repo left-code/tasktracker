@@ -27,6 +27,26 @@ Install or update from PowerShell:
 irm https://raw.githubusercontent.com/vlkozl/tasktracker/main/scripts/Install-TaskTracker.ps1 | iex
 ```
 
+On an old Windows PowerShell setup where this fails with an SSL/TLS error, run
+`[Net.ServicePointManager]::SecurityProtocol = 'Tls12'` first, then the command again. The setting lasts only for
+that window, so the `powershell -ExecutionPolicy Bypass -File` commands below, which start a new one, don't get it.
+Use `powershell -ExecutionPolicy Bypass -Command "[Net.ServicePointManager]::SecurityProtocol = 'Tls12'; & .\Install-TaskTracker.ps1"` instead.
+
+To install a specific release, use this form, which passes `-Version` to the script:
+
+```powershell
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/vlkozl/tasktracker/main/scripts/Install-TaskTracker.ps1))) -Version v1.4.0
+```
+
+Prefer to read the script before running it? Download it, look at it, then run the file. Run this way,
+`TaskTracker` is found in new terminals, not in the one you ran the installer from.
+
+```powershell
+irm https://raw.githubusercontent.com/vlkozl/tasktracker/main/scripts/Install-TaskTracker.ps1 -OutFile Install-TaskTracker.ps1
+notepad Install-TaskTracker.ps1
+powershell -ExecutionPolicy Bypass -File .\Install-TaskTracker.ps1
+```
+
 Or run the script from a local copy of this repository:
 
 ```powershell
@@ -35,12 +55,17 @@ Or run the script from a local copy of this repository:
 .\scripts\Install-TaskTracker.ps1 -Version v1.4.0
 ```
 
+If Windows PowerShell says running scripts is disabled, run it as
+`powershell -ExecutionPolicy Bypass -File scripts\Install-TaskTracker.ps1` instead; `TaskTracker` is then found
+in new terminals. The one-line install above isn't affected.
+
 The script downloads the public `TaskTracker.exe` release asset directly. GitHub CLI and GitHub
 authentication are not needed.
 
 It downloads the latest stable release by default, installs to `%LOCALAPPDATA%\Programs\TaskTracker`,
-and adds that folder to your user `PATH`. Open a new terminal afterward to run `TaskTracker`.
-No administrator rights or .NET installation are needed. Rerun the script to update; close TaskTracker
+and adds that folder to your user `PATH`. After the one-line install, `TaskTracker` runs in the same window
+straight away; terminals that were already open need a restart to find it. No administrator rights or .NET installation are needed.
+Rerun the script to update: the new version replaces the old one in the same folder. Close TaskTracker
 first if it is running. Your logs and `current.json` stay in `%USERPROFILE%\.TaskTracker`.
 The script supports Windows PowerShell 5.1 and PowerShell 7.
 
